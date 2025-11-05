@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Гексагональное Домино</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+            color: white;
+            min-height: 100vh;
+            padding: 10px;
+            touch-action: manipulation;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            font-size: 1.6em;
+            margin-bottom: 8px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .game-area {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .board-container {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            order: 1;
+        }
+
+        .board-title {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+            color: #FFD700;
+        }
+
+        canvas {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            display: block;
+            margin: 0 auto;
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            max-width: 100%;
+            height: auto;
+        }
+
+        .controls {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 12px;
+            padding: 15px;
+            backdrop-filter: blur(10px);
+            order: 2;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .control-group h3 {
+            margin-bottom: 8px;
+            color: #FFD700;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 4px;
+            font-size: 1.1em;
+        }
+
+        .buttons-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .control-button {
+            background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+            color: white;
+            border: none;
+            padding: 14px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+            min-height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+
+        .control-button:active {
+            transform: scale(0.95);
+            background: linear-gradient(45deg, #e55a5a, #e57e48);
+        }
+
+        .player-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+        }
+
+        .player {
+            text-align: center;
+            padding: 8px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            flex: 1;
+            margin: 0 5px;
+        }
+
+        .player.active {
+            background: rgba(255, 215, 0, 0.2);
+            border: 2px solid #FFD700;
+        }
+
+        .domino-pieces {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            justify-content: center;
+            margin-top: 12px;
+            max-height: 120px;
+            overflow-y: auto;
+            padding: 8px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .domino-piece {
+            width: 50px;
+            height: 25px;
+            background: linear-gradient(45deg, #8B4513, #A0522D);
+            border: 2px solid #DEB887;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            font-size: 0.8em;
+        }
+
+        .domino-piece::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 1px;
+            height: 100%;
+            background: #DEB887;
+            transform: translateX(-50%);
+        }
+
+        .domino-piece:active {
+            transform: scale(1.1);
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.5);
+        }
+
+        .domino-piece.selected {
+            border-color: #FFD700;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
+            transform: scale(1.15);
+        }
+
+        .domino-piece.used {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .domino-value {
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .game-info {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            text-align: center;
+            font-size: 0.9em;
+        }
+
+        .coordinates-info {
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px;
+            border-radius: 4px;
+            margin-top: 8px;
+            font-size: 0.8em;
+        }
+
+        .score-display {
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #FFD700;
+            margin: 8px 0;
+        }
+
+        /* Свайп-жесты */
+        .swipe-hint {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+
+        /* Портретная ориентация */
+        @media (max-width: 768px) and (orientation: portrait) {
+            .board-container {
+                order: 2;
+            }
+            
+            .controls {
+                order: 1;
+            }
+            
+            canvas {
+                max-height: 50vh;
+            }
+            
+            .buttons-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .domino-pieces {
+                max-height: 80px;
+            }
+            
+            .domino-piece {
+                width: 45px;
+                height: 22px;
+                font-size: 0.7em;
+            }
+        }
+
+        /* Ландшафтная ориентация */
+        @media (max-width: 768px) and (orientation: landscape) {
+            .game-area {
+                flex-direction: row;
+            }
+            
+            .board-container {
+                flex: 2;
+                order: 1;
+            }
+            
+            .controls {
+                flex: 1;
+                order: 2;
+                max-width: 40%;
+            }
+            
+            .domino-pieces {
+                max-height: 80px;
+            }
+            
+            canvas {
+                max-height: 70vh;
+            }
+        }
+
+        /* Очень маленькие экраны */
+        @media (max-width: 360px) {
+            h1 {
+                font-size: 1.4em;
+            }
+            
+            .control-button {
+                padding: 12px 8px;
+                font-size: 0.8em;
+                min-height: 45px;
+            }
+            
+            .domino-piece {
+                width: 40px;
+                height: 20px;
+                font-size: 0.7em;
+            }
+            
+            .player {
+                padding: 6px;
+                font-size: 0.9em;
+            }
+        }
+
+        /* Предотвращение выделения текста */
+        .no-select {
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+    </style>
+</head>
+<body class="no-select">
+    <div class="container">
+        <header>
+            <h1>🎲 Гексагональное Домино</h1>
+            <p>Размещайте костяшки, совмещая числа</p>
+        </header>
+
+        <div class="game-area">
+            <div class="board-container">
+                <div class="board-title">Игровое поле</div>
+                <canvas id="gameBoard" width="400" height="400"></canvas>
+                
+                <div class="game-info">
+                    <div id="gamePhase">Фаза расстановки</div>
+                    <div class="score-display" id="scoreDisplay">Счёт: 0 | Осталось: 28</div>
+                    <div class="coordinates-info">
+                        <div>Координаты: <span id="coordsInfo">Нажмите на поле</span></div>
+                    </div>
+                    <div class="swipe-hint">💡 Свайп влево/вправо для поворота</div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <h3>🎮 Управление</h3>
+                    <div class="buttons-grid">
+                        <button class="control-button" id="newGameBtn">Новая игра</button>
+                        <button class="control-button" id="rotateLeft">↶ Повернуть (←)</button>
+                        <button class="control-button" id="rotateRight">↷ Повернуть (→)</button>
+                        <button class="control-button" id="shufflePieces">🔀 Перемешать</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>👥 Игроки</h3>
+                    <div class="player-info">
+                        <div class="player active" id="player1">
+                            <div>Игрок 1</div>
+                            <div>Костяшек: <span id="player1Count">7</span></div>
+                        </div>
+                        <div class="player" id="player2">
+                            <div>Игрок 2</div>
+                            <div>Костяшек: <span id="player2Count">7</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>🎲 Ваши костяшки</h3>
+                    <div class="domino-pieces" id="dominoPieces">
+                        <!-- Костяшки будут добавлены здесь -->
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <h3>⚙️ Настройки</h3>
+                    <div class="buttons-grid">
+                        <button class="control-button" id="toggleNumbers">🔢 Числа</button>
+                        <button class="control-button" id="toggleLines">📐 Линии</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class HexagonalDomino {
+            constructor() {
+                this.canvas = document.getElementById('gameBoard');
+                this.ctx = this.canvas.getContext('2d');
+                
+                // Адаптивные размеры для мобильных
+                this.setCanvasSize();
+                
+                // Настройки игры
+                this.boardSize = 5; // Уменьшено для мобильных
+                this.currentPlayer = 0;
+                this.gamePhase = 'placement';
+                this.selectedPiece = null;
+                this.pieceOrientation = 0;
+                
+                // Направления для гексагональной сетки
+                this.directionNames = ['↓', '↘', '↙', '↑', '↖', '↗'];
+                
+                // Игровое состояние
+                this.board = [];
+                this.dominoPieces = [];
+                this.usedPieces = [];
+                this.players = [
+                    { pieces: [], score: 0 },
+                    { pieces: [], score: 0 }
+                ];
+                
+                // Настройки отображения
+                this.showNumbers = true;
+                this.showLines = true;
+
+                // Для свайпа
+                this.touchStartX = 0;
+                this.touchStartY = 0;
+                
+                this.initializeGame();
+                this.setupEventListeners();
+                this.createDominoPieces();
+                this.dealPieces();
+                this.drawBoard();
+            }
+            
+            setCanvasSize() {
+                const dpr = window.devicePixelRatio || 1;
+                const isMobile = window.innerWidth <= 768;
+                
+                // Адаптивные размеры
+                let width, height;
+                if (isMobile) {
+                    if (window.innerHeight > window.innerWidth) {
+                        // Портретная ориентация
+                        width = Math.min(window.innerWidth - 40, 400);
+                        height = width;
+                    } else {
+                        // Ландшафтная ориентация
+                        height = Math.min(window.innerHeight - 100, 300);
+                        width = height;
+                    }
+                } else {
+                    width = 400;
+                    height = 400;
+                }
+                
+                this.canvas.style.width = width + 'px';
+                this.canvas.style.height = height + 'px';
+                this.canvas.width = width * dpr;
+                this.canvas.height = height * dpr;
+                this.ctx.scale(dpr, dpr);
+            }
+            
+            initializeGame() {
+                this.board = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null));
+                this.currentPlayer = 0;
+                this.gamePhase = 'placement';
+                this.selectedPiece = null;
+                this.pieceOrientation = 0;
+                this.usedPieces = [];
+                this.players[0].pieces = [];
+                this.players[1].pieces = [];
+                this.players[0].score = 0;
+                this.players[1].score = 0;
+                
+                this.updateGamePhase();
+                this.updateScores();
+                this.drawBoard();
+            }
+            
+            setupEventListeners() {
+                // Обработчики касаний
+                this.canvas.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = touch.clientX - rect.left;
+                    const y = touch.clientY - rect.top;
+                    this.touchStartX = x;
+                    this.touchStartY = y;
+                    this.handleBoardClick(x, y);
+                }, { passive: false });
+                
+                this.canvas.addEventListener('touchmove', (e) => {
+                    e.preventDefault();
+                }, { passive: false });
+                
+                this.canvas.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    if (e.changedTouches.length > 0) {
+                        const touch = e.changedTouches[0];
+                        const rect = this.canvas.getBoundingClientRect();
+                        const x = touch.clientX - rect.left;
+                        const y = touch.clientY - rect.top;
+                        
+                        // Определяем свайп
+                        const deltaX = x - this.touchStartX;
+                        const deltaY = y - this.touchStartY;
+                        
+                        if (Math.abs(deltaX) > 30 && Math.abs(deltaY) < 50) {
+                            if (deltaX > 0) {
+                                this.rotateRight();
+                            } else {
+                                this.rotateLeft();
+                            }
+                        }
+                    }
+                }, { passive: false });
+                
+                // Обработчики кликов для десктопа
+                this.canvas.addEventListener('click', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+                    this.handleBoardClick(x, y);
+                });
+                
+                // Кнопки управления
+                document.getElementById('newGameBtn').addEventListener('click', () => this.initializeGame());
+                document.getElementById('rotateLeft').addEventListener('click', () => this.rotateLeft());
+                document.getElementById('rotateRight').addEventListener('click', () => this.rotateRight());
+                document.getElementById('shufflePieces').addEventListener('click', () => this.shufflePlayerPieces());
+                document.getElementById('toggleNumbers').addEventListener('click', () => this.toggleNumbers());
+                document.getElementById('toggleLines').addEventListener('click', () => this.toggleLines());
+                
+                // Горячие клавиши и обработка ресайза
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'r' || e.key === 'к' || e.key === 'ArrowRight') this.rotateRight();
+                    if (e.key === 'q' || e.key === 'й' || e.key === 'ArrowLeft') this.rotateLeft();
+                });
+
+                // Адаптация к изменению размера окна
+                window.addEventListener('resize', () => {
+                    setTimeout(() => {
+                        this.setCanvasSize();
+                        this.drawBoard();
+                    }, 100);
+                });
+
+                // Предотвращение контекстного меню на canvas
+                this.canvas.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    return false;
+                });
+            }
+            
+            createDominoPieces() {
+                this.dominoPieces = [];
+                for (let i = 0; i <= 5; i++) {
+                    for (let j = i; j <= 5; j++) {
+                        this.dominoPieces.push({
+                            id: `${i}-${j}`,
+                            values: [i, j],
+                            used: false
+                        });
+                    }
+                }
+            }
+            
+            dealPieces() {
+                const shuffled = [...this.dominoPieces].sort(() => Math.random() - 0.5);
+                this.players[0].pieces = shuffled.slice(0, 7);
+                this.players[1].pieces = shuffled.slice(7, 14);
+                this.remainingPieces = shuffled.slice(14);
+                
+                this.updateDominoPalette();
+            }
+            
+            updateDominoPalette() {
+                const palette = document.getElementById('dominoPieces');
+                palette.innerHTML = '';
+                
+                this.players[this.currentPlayer].pieces.forEach((piece, index) => {
+                    const pieceElement = document.createElement('div');
+                    pieceElement.className = 'domino-piece';
+                    if (piece.used) pieceElement.classList.add('used');
+                    if (this.selectedPiece === piece) pieceElement.classList.add('selected');
+                    
+                    pieceElement.innerHTML = `
+                        <div class="domino-value">${piece.values[0]}</div>
+                        <div class="domino-value">${piece.values[1]}</div>
+                    `;
+                    
+                    pieceElement.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (!piece.used) {
+                            this.selectedPiece = piece;
+                            this.updateDominoPalette();
+                            this.drawBoard();
+                        }
+                    });
+                    
+                    palette.appendChild(pieceElement);
+                });
+                
+                document.getElementById('player1Count').textContent = 
+                    this.players[0].pieces.filter(p => !p.used).length;
+                document.getElementById('player2Count').textContent = 
+                    this.players[1].pieces.filter(p => !p.used).length;
+            }
+            
+            rotateLeft() {
+                this.pieceOrientation = (this.pieceOrientation + 5) % 6;
+                this.drawBoard();
+            }
+            
+            rotateRight() {
+                this.pieceOrientation = (this.pieceOrientation + 1) % 6;
+                this.drawBoard();
+            }
+            
+            toggleNumbers() {
+                this.showNumbers = !this.showNumbers;
+                this.drawBoard();
+            }
+            
+            toggleLines() {
+                this.showLines = !this.showLines;
+                this.drawBoard();
+            }
+            
+            shufflePlayerPieces() {
+                const currentPieces = this.players[this.currentPlayer].pieces.filter(p => !p.used);
+                const shuffled = [...currentPieces].sort(() => Math.random() - 0.5);
+                this.players[this.currentPlayer].pieces = [
+                    ...shuffled,
+                    ...this.players[this.currentPlayer].pieces.filter(p => p.used)
+                ];
+                this.updateDominoPalette();
+            }
+            
+            getHexCenter(row, col) {
+                const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
+                const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+                
+                // Адаптивный размер гексов
+                const hexSize = Math.min(canvasWidth, canvasHeight) / (this.boardSize * 1.8);
+                const hexHeight = hexSize * Math.sqrt(3);
+                const hexWidth = hexSize * 2;
+                
+                const totalWidth = this.boardSize * hexWidth * 0.75 - hexWidth * 0.25;
+                const totalHeight = this.boardSize * hexHeight + hexHeight * 0.5;
+                
+                const offsetX = (canvasWidth - totalWidth) / 2;
+                const offsetY = (canvasHeight - totalHeight) / 2;
+                
+                const x = offsetX + col * hexWidth * 0.75 + hexWidth / 2;
+                const y = offsetY + row * hexHeight + (col % 2) * hexHeight / 2 + hexHeight / 2;
+                
+                return { x, y, hexSize };
+            }
+            
+            getHexAtPosition(x, y) {
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        const center = this.getHexCenter(row, col);
+                        const distance = Math.sqrt((x - center.x) ** 2 + (y - center.y) ** 2);
+                        
+                        if (distance < center.hexSize * 0.9) {
+                            document.getElementById('coordsInfo').textContent = 
+                                `Строка: ${row}, Колонка: ${col}`;
+                            return { row, col, hexX: center.x, hexY: center.y, distance };
+                        }
+                    }
+                }
+                
+                document.getElementById('coordsInfo').textContent = 'Вне поля';
+                return null;
+            }
+            
+            getNextHexInDirection(row, col, direction) {
+                const directions = [
+                    () => ({ row: row + 1, col: col }),
+                    () => {
+                        if (col % 2 === 0) {
+                            return { row: row, col: col + 1 };
+                        } else {
+                            return { row: row + 1, col: col + 1 };
+                        }
+                    },
+                    () => {
+                        if (col % 2 === 0) {
+                            return { row: row - 1, col: col + 1 };
+                        } else {
+                            return { row: row, col: col + 1 };
+                        }
+                    },
+                    () => ({ row: row - 1, col: col }),
+                    () => {
+                        if (col % 2 === 0) {
+                            return { row: row - 1, col: col - 1 };
+                        } else {
+                            return { row: row, col: col - 1 };
+                        }
+                    },
+                    () => {
+                        if (col % 2 === 0) {
+                            return { row: row, col: col - 1 };
+                        } else {
+                            return { row: row + 1, col: col - 1 };
+                        }
+                    }
+                ];
+                
+                if (direction < directions.length) {
+                    return directions[direction]();
+                }
+                return null;
+            }
+            
+            isValidPosition(row, col) {
+                return row >= 0 && row < this.boardSize && col >= 0 && col < this.boardSize;
+            }
+            
+            canPlaceDomino(row, col, piece, orientation) {
+                const secondPos = this.getNextHexInDirection(row, col, orientation);
+                if (!secondPos || !this.isValidPosition(secondPos.row, secondPos.col)) {
+                    return false;
+                }
+                
+                if (this.board[row][col] !== null || this.board[secondPos.row][secondPos.col] !== null) {
+                    return false;
+                }
+                
+                const neighbors1 = this.getNeighborCells(row, col);
+                const neighbors2 = this.getNeighborCells(secondPos.row, secondPos.col);
+                
+                let hasValidConnection = false;
+                
+                for (const neighbor of neighbors1) {
+                    if (this.board[neighbor.row][neighbor.col] !== null) {
+                        const neighborValue = this.board[neighbor.row][neighbor.col];
+                        if (neighborValue !== piece.values[0]) {
+                            return false;
+                        }
+                        hasValidConnection = true;
+                    }
+                }
+                
+                for (const neighbor of neighbors2) {
+                    if (this.board[neighbor.row][neighbor.col] !== null) {
+                        const neighborValue = this.board[neighbor.row][neighbor.col];
+                        if (neighborValue !== piece.values[1]) {
+                            return false;
+                        }
+                        hasValidConnection = true;
+                    }
+                }
+                
+                if (this.usedPieces.length > 0 && !hasValidConnection) {
+                    return false;
+                }
+                
+                return true;
+            }
+            
+            getNeighborCells(row, col) {
+                const neighbors = [];
+                for (let direction = 0; direction < 6; direction++) {
+                    const neighbor = this.getNextHexInDirection(row, col, direction);
+                    if (neighbor && this.isValidPosition(neighbor.row, neighbor.col)) {
+                        neighbors.push(neighbor);
+                    }
+                }
+                return neighbors;
+            }
+            
+            handleBoardClick(x, y) {
+                if (this.gamePhase !== 'placement' || !this.selectedPiece) return;
+                
+                const hex = this.getHexAtPosition(x, y);
+                if (hex) {
+                    if (this.canPlaceDomino(hex.row, hex.col, this.selectedPiece, this.pieceOrientation)) {
+                        this.placeDomino(hex.row, hex.col, this.selectedPiece, this.pieceOrientation);
+                    }
+                }
+            }
+            
+            placeDomino(row, col, piece, orientation) {
+                const secondPos = this.getNextHexInDirection(row, col, orientation);
+                
+                this.board[row][col] = piece.values[0];
+                this.board[secondPos.row][secondPos.col] = piece.values[1];
+                
+                piece.used = true;
+                this.usedPieces.push({
+                    piece: piece,
+                    position1: { row, col },
+                    position2: secondPos,
+                    orientation: orientation,
+                    player: this.currentPlayer
+                });
+                
+                const points = piece.values[0] + piece.values[1];
+                this.players[this.currentPlayer].score += points;
+                
+                this.currentPlayer = (this.currentPlayer + 1) % 2;
+                this.selectedPiece = null;
+                
+                this.updateGamePhase();
+                this.updateScores();
+                this.updateDominoPalette();
+                this.drawBoard();
+                
+                if (this.checkGameOver()) {
+                    this.gamePhase = 'gameover';
+                    this.updateGamePhase();
+                    setTimeout(() => {
+                        const winner = this.players[0].score > this.players[1].score ? 1 : 
+                                     this.players[1].score > this.players[0].score ? 2 : 0;
+                        if (winner === 0) {
+                            alert('Ничья!');
+                        } else {
+                            alert(`Игрок ${winner} победил со счетом ${this.players[winner-1].score}!`);
+                        }
+                    }, 500);
+                }
+            }
+            
+            checkGameOver() {
+                const player1CanMove = this.players[0].pieces.some(p => !p.used && this.hasValidMove(p));
+                const player2CanMove = this.players[1].pieces.some(p => !p.used && this.hasValidMove(p));
+                
+                return (!player1CanMove && !player2CanMove) || this.usedPieces.length === this.dominoPieces.length;
+            }
+            
+            hasValidMove(piece) {
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        for (let orientation = 0; orientation < 6; orientation++) {
+                            if (this.canPlaceDomino(row, col, piece, orientation)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+            
+            updateGamePhase() {
+                const phaseElement = document.getElementById('gamePhase');
+                phaseElement.textContent = `Ход игрока ${this.currentPlayer + 1}`;
+                
+                document.getElementById('player1').classList.toggle('active', this.currentPlayer === 0);
+                document.getElementById('player2').classList.toggle('active', this.currentPlayer === 1);
+            }
+            
+            updateScores() {
+                const totalUsed = this.usedPieces.length;
+                const totalPieces = this.dominoPieces.length;
+                const scoreDisplay = document.getElementById('scoreDisplay');
+                scoreDisplay.textContent = 
+                    `Счёт: И1:${this.players[0].score} | И2:${this.players[1].score} | Ост:${totalPieces - totalUsed}`;
+            }
+            
+            drawBoard() {
+                const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
+                const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+                
+                this.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+                
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        const center = this.getHexCenter(row, col);
+                        this.drawHex(this.ctx, center.x, center.y, center.hexSize, row, col);
+                    }
+                }
+                
+                if (this.showLines) {
+                    this.drawDominoLines();
+                }
+            }
+            
+            drawHex(ctx, x, y, hexSize, row, col) {
+                ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = Math.PI / 3 * i;
+                    const hexX = x + hexSize * Math.cos(angle);
+                    const hexY = y + hexSize * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(hexX, hexY);
+                    else ctx.lineTo(hexX, hexY);
+                }
+                ctx.closePath();
+                
+                const cellValue = this.board[row][col];
+                if (cellValue !== null) {
+                    const hue = (cellValue * 60) % 360;
+                    ctx.fillStyle = `hsla(${hue}, 70%, 50%, 0.7)`;
+                } else {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                }
+                
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                
+                if (this.showNumbers && cellValue !== null) {
+                    ctx.fillStyle = 'white';
+                    // Адаптивный размер шрифта
+                    const fontSize = Math.max(10, hexSize * 0.6);
+                    ctx.font = `bold ${fontSize}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(cellValue.toString(), x, y);
+                }
+            }
+            
+            drawDominoLines() {
+                this.usedPieces.forEach(domino => {
+                    const center1 = this.getHexCenter(domino.position1.row, domino.position1.col);
+                    const center2 = this.getHexCenter(domino.position2.row, domino.position2.col);
+                    
+                    this.ctx.strokeStyle = domino.player === 0 ? '#FF6B6B' : '#4ECDC4';
+                    this.ctx.lineWidth = 2;
+                    this.ctx.setLineDash([]);
+                    
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(center1.x, center1.y);
+                    this.ctx.lineTo(center2.x, center2.y);
+                    this.ctx.stroke();
+                    
+                    this.ctx.fillStyle = domino.player === 0 ? '#FF6B6B' : '#4ECDC4';
+                    this.ctx.beginPath();
+                    const midX = (center1.x + center2.x) / 2;
+                    const midY = (center1.y + center2.y) / 2;
+                    this.ctx.arc(midX, midY, 3, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+            }
+        }
+
+        // Инициализация игры
+        document.addEventListener('DOMContentLoaded', () => {
+            new HexagonalDomino();
+        });
+
+        // Предотвращение масштабирования на iOS
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length > 1) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', function(e) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                e.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, false);
+    </script>
+</body>
+</html>
