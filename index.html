@@ -557,6 +557,8 @@
                 this.validMoves = [];
                 this.hoveredHex = null;
                 
+                this.createDominoPieces();
+                this.dealPieces();
                 this.centerCamera();
                 this.updateGamePhase();
                 this.updateScores();
@@ -829,34 +831,43 @@
                 const palette = document.getElementById('dominoPieces');
                 palette.innerHTML = '';
                 
-                this.players[this.currentPlayer].pieces.forEach((piece, index) => {
-                    const pieceElement = document.createElement('div');
-                    pieceElement.className = 'domino-piece';
-                    if (piece.used) pieceElement.classList.add('used');
-                    if (this.selectedPiece === piece) pieceElement.classList.add('selected');
-                    
-                    pieceElement.innerHTML = `
-                        <div class="domino-value">${piece.values[0]}</div>
-                        <div class="domino-value">${piece.values[1]}</div>
-                    `;
-                    
-                    pieceElement.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        if (!piece.used) {
+                const currentPlayerPieces = this.players[this.currentPlayer].pieces;
+                
+                if (currentPlayerPieces.length === 0) {
+                    palette.innerHTML = '<div style="color: white; text-align: center;">Нет костяшек</div>';
+                } else {
+                    currentPlayerPieces.forEach((piece, index) => {
+                        const pieceElement = document.createElement('div');
+                        pieceElement.className = 'domino-piece';
+                        if (this.selectedPiece === piece) pieceElement.classList.add('selected');
+                        
+                        pieceElement.innerHTML = `
+                            <div class="domino-value">${piece.values[0]}</div>
+                            <div class="domino-value">${piece.values[1]}</div>
+                        `;
+                        
+                        pieceElement.addEventListener('click', (e) => {
+                            e.stopPropagation();
                             this.selectedPiece = piece;
                             this.calculateValidMoves();
                             this.updateDominoPalette();
                             this.drawBoard();
-                        }
+                        });
+                        
+                        palette.appendChild(pieceElement);
                     });
                     
-                    palette.appendChild(pieceElement);
-                });
+                    // Автоматически выбираем первую костяшку, если ничего не выбрано
+                    if (!this.selectedPiece && currentPlayerPieces.length > 0) {
+                        this.selectedPiece = currentPlayerPieces[0];
+                        this.calculateValidMoves();
+                    }
+                }
                 
                 document.getElementById('player1Count').textContent = 
-                    this.players[0].pieces.filter(p => !p.used).length;
+                    this.players[0].pieces.length;
                 document.getElementById('player2Count').textContent = 
-                    this.players[1].pieces.filter(p => !p.used).length;
+                    this.players[1].pieces.length;
             }
             
             rotateLeft() {
@@ -1009,6 +1020,11 @@
                     return false;
                 }
                 
+                // Для первого хода разрешаем размещение без соседей
+                if (this.usedPieces.length === 0) {
+                    return true;
+                }
+                
                 const neighbors1 = this.getNeighborCells(row, col);
                 const neighbors2 = this.getNeighborCells(secondPos.row, secondPos.col);
                 
@@ -1034,7 +1050,8 @@
                     }
                 }
                 
-                if (this.usedPieces.length > 0 && !hasValidConnection) {
+                // После первого хода должна быть хотя бы одна связь
+                if (!hasValidConnection) {
                     return false;
                 }
                 
@@ -1081,38 +1098,86 @@
                 const points = piece.values[0] + piece.values[1];
                 this.players[this.currentPlayer].score += points;
                 
-                this.currentPlayer = (this.currentPlayer + 1) % 2;
+                // Удаляем использованную костяшку из руки игрока
+                const pieceIndex = this.players[this.currentPlayer].pieces.findIndex(p => p === piece);
+                if (pieceIndex !== -1) {
+                    this.players[this.currentPlayer].pieces.splice(pieceIndex, 1);
+                }
+                
                 this.selectedPiece = null;
                 this.validMoves = [];
+                
+                // Проверяем, остались ли костяшки у текущего игрока
+                const currentPlayerHasPieces = this.players[this.currentPlayer].pieces.length > 0;
+                
+                if (currentPlayerHasPieces) {
+                    // Передаем ход следующему игроку
+                    this.currentPlayer = (this.currentPlayer + 1) % 2;
+                } else {
+                    // Если у текущего игрока не осталось костяшек, проверяем другого игрока
+                    const otherPlayer = (this.currentPlayer + 1) % 2;
+                    if (this.players[otherPlayer].pieces.length > 0) {
+                        this.currentPlayer = otherPlayer;
+                    } else {
+                        // Если у обоих игроков не осталось костяшек - игра завершается
+                        this.gamePhase = 'gameover';
+                        this.updateGamePhase();
+                        setTimeout(() => {
+                            const winner = this.players[0].score > this.players[1].score ? 1 : 
+                                         this.players[1].score > this.players[0].score ? 2 : 0;
+                            if (winner === 0) {
+                                alert('Ничья!');
+                            } else {
+                                alert(`Игрок ${winner} победил со счетом ${this.players[winner-1].score}!`);
+                            }
+                        }, 500);
+                        this.updateGamePhase();
+                        this.updateScores();
+                        this.updateDominoPalette();
+                        this.drawBoard();
+                        return;
+                    }
+                }
+                
+                // Проверяем, может ли текущий игрок сделать ход
+                const currentPlayerCanMove = this.players[this.currentPlayer].pieces.some(p => 
+                    this.hasValidMove(p)
+                );
+                
+                if (!currentPlayerCanMove) {
+                    // Если текущий игрок не может сделать ход, проверяем другого игрока
+                    const otherPlayer = (this.currentPlayer + 1) % 2;
+                    const otherPlayerCanMove = this.players[otherPlayer].pieces.some(p => 
+                        this.hasValidMove(p)
+                    );
+                    
+                    if (!otherPlayerCanMove) {
+                        // Если оба игрока не могут сделать ход - игра завершается
+                        this.gamePhase = 'gameover';
+                        this.updateGamePhase();
+                        setTimeout(() => {
+                            const winner = this.players[0].score > this.players[1].score ? 1 : 
+                                         this.players[1].score > this.players[0].score ? 2 : 0;
+                            if (winner === 0) {
+                                alert('Ничья!');
+                            } else {
+                                alert(`Игрок ${winner} победил со счетом ${this.players[winner-1].score}!`);
+                            }
+                        }, 500);
+                    } else {
+                        // Если другой игрок может сделать ход, передаем ход ему
+                        this.currentPlayer = otherPlayer;
+                    }
+                }
                 
                 this.updateGamePhase();
                 this.updateScores();
                 this.updateDominoPalette();
                 this.drawBoard();
-                
-                if (this.checkGameOver()) {
-                    this.gamePhase = 'gameover';
-                    this.updateGamePhase();
-                    setTimeout(() => {
-                        const winner = this.players[0].score > this.players[1].score ? 1 : 
-                                     this.players[1].score > this.players[0].score ? 2 : 0;
-                        if (winner === 0) {
-                            alert('Ничья!');
-                        } else {
-                            alert(`Игрок ${winner} победил со счетом ${this.players[winner-1].score}!`);
-                        }
-                    }, 500);
-                }
-            }
-            
-            checkGameOver() {
-                const player1CanMove = this.players[0].pieces.some(p => !p.used && this.hasValidMove(p));
-                const player2CanMove = this.players[1].pieces.some(p => !p.used && this.hasValidMove(p));
-                
-                return (!player1CanMove && !player2CanMove) || this.usedPieces.length === this.dominoPieces.length;
             }
             
             hasValidMove(piece) {
+                // Проверяем все возможные позиции и ориентации для костяшки
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
                         for (let orientation = 0; orientation < 6; orientation++) {
@@ -1127,7 +1192,11 @@
             
             updateGamePhase() {
                 const phaseElement = document.getElementById('gamePhase');
-                phaseElement.textContent = `Ход игрока ${this.currentPlayer + 1}`;
+                if (this.gamePhase === 'gameover') {
+                    phaseElement.textContent = 'Игра завершена';
+                } else {
+                    phaseElement.textContent = `Ход игрока ${this.currentPlayer + 1}`;
+                }
                 
                 document.getElementById('player1').classList.toggle('active', this.currentPlayer === 0);
                 document.getElementById('player2').classList.toggle('active', this.currentPlayer === 1);
