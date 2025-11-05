@@ -272,6 +272,17 @@
             cursor: pointer;
         }
 
+        .orientation-preview {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            z-index: 10;
+        }
+
         /* Портретная ориентация */
         @media (max-width: 768px) and (orientation: portrait) {
             .board-container {
@@ -383,6 +394,9 @@
                         <button class="zoom-button" id="zoomOut">-</button>
                         <button class="zoom-button" id="resetView">⟳</button>
                     </div>
+                    <div class="orientation-preview" id="orientationPreview">
+                        Направление: ↓
+                    </div>
                 </div>
                 
                 <div class="game-info">
@@ -433,6 +447,7 @@
                         <button class="control-button" id="toggleNumbers">🔢 Числа</button>
                         <button class="control-button" id="toggleLines">📐 Линии</button>
                         <button class="control-button" id="toggleGrid">🔷 Сетка</button>
+                        <button class="control-button" id="toggleHighlights">✨ Подсветка</button>
                     </div>
                 </div>
             </div>
@@ -446,8 +461,8 @@
                 this.ctx = this.canvas.getContext('2d');
                 
                 // Увеличиваем размер поля
-                this.boardSize = 11; // Больше клеток
-                this.baseHexSize = 18; // Меньший размер гексов
+                this.boardSize = 11;
+                this.baseHexSize = 18;
                 
                 // Настройки камеры и масштабирования
                 this.camera = {
@@ -479,12 +494,18 @@
                 this.showNumbers = true;
                 this.showLines = true;
                 this.showGrid = true;
+                this.showHighlights = true;
 
                 // Для свайпа и масштабирования
                 this.touchStartX = 0;
                 this.touchStartY = 0;
                 this.isDragging = false;
                 this.lastTouchDistance = 0;
+                
+                // Для превью и подсветки
+                this.mousePos = { x: 0, y: 0 };
+                this.hoveredHex = null;
+                this.validMoves = [];
                 
                 this.initializeGame();
                 this.setupEventListeners();
@@ -506,7 +527,6 @@
                 this.canvas.style.height = height + 'px';
                 this.ctx.scale(dpr, dpr);
                 
-                // Центрируем камеру на поле при изменении размера
                 this.centerCamera();
             }
             
@@ -534,10 +554,13 @@
                 this.players[1].pieces = [];
                 this.players[0].score = 0;
                 this.players[1].score = 0;
+                this.validMoves = [];
+                this.hoveredHex = null;
                 
                 this.centerCamera();
                 this.updateGamePhase();
                 this.updateScores();
+                this.updateOrientationPreview();
                 this.drawBoard();
             }
             
@@ -552,15 +575,11 @@
                         this.touchStartY = touch.clientY - rect.top;
                         this.isDragging = true;
                         
-                        // Обрабатываем клик только если не было драга
-                        setTimeout(() => {
-                            if (this.isDragging) {
-                                const worldPos = this.screenToWorld(this.touchStartX, this.touchStartY);
-                                this.handleBoardClick(worldPos.x, worldPos.y);
-                            }
-                        }, 50);
+                        // Обновляем позицию мыши для превью
+                        this.mousePos.x = this.touchStartX;
+                        this.mousePos.y = this.touchStartY;
+                        this.updateHoveredHex();
                     } else if (e.touches.length === 2) {
-                        // Начало масштабирования двумя пальцами
                         const touch1 = e.touches[0];
                         const touch2 = e.touches[1];
                         const rect = this.canvas.getBoundingClientRect();
@@ -583,10 +602,14 @@
                         const x = touch.clientX - rect.left;
                         const y = touch.clientY - rect.top;
                         
+                        // Обновляем позицию мыши для превью
+                        this.mousePos.x = x;
+                        this.mousePos.y = y;
+                        this.updateHoveredHex();
+                        
                         const deltaX = x - this.touchStartX;
                         const deltaY = y - this.touchStartY;
                         
-                        // Перемещаем камеру
                         this.camera.x -= deltaX / this.camera.scale;
                         this.camera.y -= deltaY / this.camera.scale;
                         
@@ -595,7 +618,6 @@
                         
                         this.drawBoard();
                     } else if (e.touches.length === 2) {
-                        // Масштабирование двумя пальцами
                         const touch1 = e.touches[0];
                         const touch2 = e.touches[1];
                         const rect = this.canvas.getBoundingClientRect();
@@ -621,10 +643,8 @@
                 
                 this.canvas.addEventListener('touchend', (e) => {
                     e.preventDefault();
-                    this.isDragging = false;
                     
                     if (e.changedTouches.length === 1 && !e.touches.length) {
-                        // Обработка свайпа после касания
                         const touch = e.changedTouches[0];
                         const rect = this.canvas.getBoundingClientRect();
                         const x = touch.clientX - rect.left;
@@ -633,8 +653,13 @@
                         const deltaX = x - this.touchStartX;
                         const deltaY = y - this.touchStartY;
                         
+                        // Если был клик (маленькое перемещение), обрабатываем как клик
+                        if (Math.sqrt(deltaX ** 2 + deltaY ** 2) < 10) {
+                            const worldPos = this.screenToWorld(x, y);
+                            this.handleBoardClick(worldPos.x, worldPos.y);
+                        }
                         // Если был значительный свайп по горизонтали - поворачиваем
-                        if (Math.abs(deltaX) > 30 && Math.abs(deltaY) < 50) {
+                        else if (Math.abs(deltaX) > 30 && Math.abs(deltaY) < 50) {
                             if (deltaX > 0) {
                                 this.rotateRight();
                             } else {
@@ -642,9 +667,20 @@
                             }
                         }
                     }
+                    
+                    this.isDragging = false;
                 }, { passive: false });
                 
                 // Обработчики мыши для десктопа
+                this.canvas.addEventListener('mousemove', (e) => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.mousePos.x = e.clientX - rect.left;
+                    this.mousePos.y = e.clientY - rect.top;
+                    
+                    this.updateHoveredHex();
+                    this.drawBoard();
+                });
+                
                 this.canvas.addEventListener('mousedown', (e) => {
                     const rect = this.canvas.getBoundingClientRect();
                     const x = e.clientX - rect.left;
@@ -652,25 +688,6 @@
                     this.touchStartX = x;
                     this.touchStartY = y;
                     this.isDragging = true;
-                });
-                
-                this.canvas.addEventListener('mousemove', (e) => {
-                    if (this.isDragging) {
-                        const rect = this.canvas.getBoundingClientRect();
-                        const x = e.clientX - rect.left;
-                        const y = e.clientY - rect.top;
-                        
-                        const deltaX = x - this.touchStartX;
-                        const deltaY = y - this.touchStartY;
-                        
-                        this.camera.x -= deltaX / this.camera.scale;
-                        this.camera.y -= deltaY / this.camera.scale;
-                        
-                        this.touchStartX = x;
-                        this.touchStartY = y;
-                        
-                        this.drawBoard();
-                    }
                 });
                 
                 this.canvas.addEventListener('mouseup', (e) => {
@@ -712,6 +729,7 @@
                 document.getElementById('toggleNumbers').addEventListener('click', () => this.toggleNumbers());
                 document.getElementById('toggleLines').addEventListener('click', () => this.toggleLines());
                 document.getElementById('toggleGrid').addEventListener('click', () => this.toggleGrid());
+                document.getElementById('toggleHighlights').addEventListener('click', () => this.toggleHighlights());
                 
                 // Кнопки масштабирования
                 document.getElementById('zoomIn').addEventListener('click', () => {
@@ -747,6 +765,11 @@
                 });
             }
             
+            updateHoveredHex() {
+                const worldPos = this.screenToWorld(this.mousePos.x, this.mousePos.y);
+                this.hoveredHex = this.getHexAtPosition(worldPos.x, worldPos.y);
+            }
+            
             screenToWorld(screenX, screenY) {
                 return {
                     x: (screenX - this.camera.x) / this.camera.scale + this.camera.x,
@@ -765,7 +788,6 @@
                 const newScale = this.camera.scale * factor;
                 
                 if (newScale >= this.camera.minScale && newScale <= this.camera.maxScale) {
-                    // Сохраняем позицию центра масштабирования в мировых координатах
                     const worldCenterBefore = {
                         x: (centerX - this.camera.x) / this.camera.scale + this.camera.x,
                         y: (centerY - this.camera.y) / this.camera.scale + this.camera.y
@@ -773,7 +795,6 @@
                     
                     this.camera.scale = newScale;
                     
-                    // Корректируем позицию камеры чтобы центр остался на месте
                     const screenCenterAfter = this.worldToScreen(worldCenterBefore.x, worldCenterBefore.y);
                     this.camera.x += centerX - screenCenterAfter.x;
                     this.camera.y += centerY - screenCenterAfter.y;
@@ -823,6 +844,7 @@
                         e.stopPropagation();
                         if (!piece.used) {
                             this.selectedPiece = piece;
+                            this.calculateValidMoves();
                             this.updateDominoPalette();
                             this.drawBoard();
                         }
@@ -839,12 +861,21 @@
             
             rotateLeft() {
                 this.pieceOrientation = (this.pieceOrientation + 5) % 6;
+                this.updateOrientationPreview();
+                this.calculateValidMoves();
                 this.drawBoard();
             }
             
             rotateRight() {
                 this.pieceOrientation = (this.pieceOrientation + 1) % 6;
+                this.updateOrientationPreview();
+                this.calculateValidMoves();
                 this.drawBoard();
+            }
+            
+            updateOrientationPreview() {
+                const preview = document.getElementById('orientationPreview');
+                preview.textContent = `Направление: ${this.directionNames[this.pieceOrientation]}`;
             }
             
             toggleNumbers() {
@@ -859,6 +890,11 @@
             
             toggleGrid() {
                 this.showGrid = !this.showGrid;
+                this.drawBoard();
+            }
+            
+            toggleHighlights() {
+                this.showHighlights = !this.showHighlights;
                 this.drawBoard();
             }
             
@@ -884,30 +920,24 @@
             }
             
             getHexAtPosition(worldX, worldY) {
-                // Преобразуем мировые координаты в координаты сетки
                 const hexSize = this.baseHexSize;
                 const hexHeight = hexSize * Math.sqrt(3);
                 const hexWidth = hexSize * 2;
                 
-                // Приблизительное определение столбца и строки
                 const col = Math.floor(worldX / (hexWidth * 0.75));
                 const row = Math.floor((worldY - (col % 2) * hexHeight / 2) / hexHeight);
                 
-                // Проверяем соседние клетки для точного определения
                 for (let r = Math.max(0, row - 1); r <= Math.min(this.boardSize - 1, row + 1); r++) {
                     for (let c = Math.max(0, col - 1); c <= Math.min(this.boardSize - 1, col + 1); c++) {
                         const center = this.getHexCenter(r, c);
                         const distance = Math.sqrt((worldX - center.x) ** 2 + (worldY - center.y) ** 2);
                         
                         if (distance < center.hexSize * 0.9) {
-                            document.getElementById('coordsInfo').textContent = 
-                                `Строка: ${r}, Колонка: ${c}`;
                             return { row: r, col: c, hexX: center.x, hexY: center.y, distance };
                         }
                     }
                 }
                 
-                document.getElementById('coordsInfo').textContent = 'Вне поля';
                 return null;
             }
             
@@ -953,6 +983,20 @@
             
             isValidPosition(row, col) {
                 return row >= 0 && row < this.boardSize && col >= 0 && col < this.boardSize;
+            }
+            
+            calculateValidMoves() {
+                this.validMoves = [];
+                
+                if (!this.selectedPiece) return;
+                
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        if (this.canPlaceDomino(row, col, this.selectedPiece, this.pieceOrientation)) {
+                            this.validMoves.push({ row, col });
+                        }
+                    }
+                }
             }
             
             canPlaceDomino(row, col, piece, orientation) {
@@ -1039,6 +1083,7 @@
                 
                 this.currentPlayer = (this.currentPlayer + 1) % 2;
                 this.selectedPiece = null;
+                this.validMoves = [];
                 
                 this.updateGamePhase();
                 this.updateScores();
@@ -1119,9 +1164,19 @@
                     }
                 }
                 
+                // Подсвечиваем допустимые ходы
+                if (this.selectedPiece && this.showHighlights) {
+                    this.drawValidMoves();
+                }
+                
                 // Рисуем линии между костяшками
                 if (this.showLines) {
                     this.drawDominoLines();
+                }
+                
+                // Рисуем превью размещения
+                if (this.selectedPiece && this.hoveredHex) {
+                    this.drawPlacementPreview();
                 }
                 
                 // Восстанавливаем контекст
@@ -1160,6 +1215,81 @@
                     ctx.textBaseline = 'middle';
                     ctx.fillText(cellValue.toString(), x, y);
                 }
+            }
+            
+            drawValidMoves() {
+                this.ctx.save();
+                this.ctx.globalAlpha = 0.3;
+                
+                for (const move of this.validMoves) {
+                    const center = this.getHexCenter(move.row, move.col);
+                    const screenPos = this.worldToScreen(center.x, center.y);
+                    
+                    this.ctx.fillStyle = '#00FF00';
+                    this.ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        const angle = Math.PI / 3 * i;
+                        const hexX = screenPos.x + center.hexSize * Math.cos(angle);
+                        const hexY = screenPos.y + center.hexSize * Math.sin(angle);
+                        if (i === 0) this.ctx.moveTo(hexX, hexY);
+                        else this.ctx.lineTo(hexX, hexY);
+                    }
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                }
+                
+                this.ctx.restore();
+            }
+            
+            drawPlacementPreview() {
+                const isValid = this.validMoves.some(move => 
+                    move.row === this.hoveredHex.row && move.col === this.hoveredHex.col
+                );
+                
+                if (!isValid) return;
+                
+                const center1 = this.getHexCenter(this.hoveredHex.row, this.hoveredHex.col);
+                const secondPos = this.getNextHexInDirection(this.hoveredHex.row, this.hoveredHex.col, this.pieceOrientation);
+                const center2 = this.getHexCenter(secondPos.row, secondPos.col);
+                
+                const screen1 = this.worldToScreen(center1.x, center1.y);
+                const screen2 = this.worldToScreen(center2.x, center2.y);
+                
+                this.ctx.save();
+                this.ctx.globalAlpha = 0.6;
+                
+                // Рисуем линию между клетками
+                this.ctx.strokeStyle = '#FFD700';
+                this.ctx.lineWidth = 3;
+                this.ctx.setLineDash([5, 5]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(screen1.x, screen1.y);
+                this.ctx.lineTo(screen2.x, screen2.y);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+                
+                // Рисуем кружки на концах
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.beginPath();
+                this.ctx.arc(screen1.x, screen1.y, 5, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                this.ctx.beginPath();
+                this.ctx.arc(screen2.x, screen2.y, 5, 0, Math.PI * 2);
+                this.ctx.fill();
+                
+                // Рисуем значения костяшки
+                if (this.showNumbers) {
+                    this.ctx.fillStyle = '#FFD700';
+                    const fontSize = Math.max(10, center1.hexSize * 0.6);
+                    this.ctx.font = `bold ${fontSize}px Arial`;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(this.selectedPiece.values[0].toString(), screen1.x, screen1.y);
+                    this.ctx.fillText(this.selectedPiece.values[1].toString(), screen2.x, screen2.y);
+                }
+                
+                this.ctx.restore();
             }
             
             drawDominoLines() {
