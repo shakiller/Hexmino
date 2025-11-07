@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Гексагональное Домино</title>
     <style>
+        /* Стили остаются практически такими же, только обновляем .domino-piece */
         * {
             margin: 0;
             padding: 0;
@@ -168,19 +169,19 @@
         }
 
         .domino-piece {
-            width: 50px;
-            height: 25px;
+            width: 60px;
+            height: 30px;
             background: linear-gradient(45deg, #8B4513, #A0522D);
             border: 2px solid #DEB887;
-            border-radius: 4px;
+            border-radius: 6px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 6px;
+            padding: 0 8px;
             cursor: pointer;
             transition: all 0.3s ease;
             position: relative;
-            font-size: 0.8em;
+            font-size: 0.9em;
         }
 
         .domino-piece::before {
@@ -188,7 +189,7 @@
             position: absolute;
             top: 0;
             left: 50%;
-            width: 1px;
+            width: 2px;
             height: 100%;
             background: #DEB887;
             transform: translateX(-50%);
@@ -283,7 +284,7 @@
             z-index: 10;
         }
 
-        /* Портретная ориентация */
+        /* Адаптивные стили остаются без изменений */
         @media (max-width: 768px) and (orientation: portrait) {
             .board-container {
                 order: 2;
@@ -307,13 +308,12 @@
             }
             
             .domino-piece {
-                width: 45px;
-                height: 22px;
-                font-size: 0.7em;
+                width: 50px;
+                height: 25px;
+                font-size: 0.8em;
             }
         }
 
-        /* Ландшафтная ориентация */
         @media (max-width: 768px) and (orientation: landscape) {
             .game-area {
                 flex-direction: row;
@@ -339,7 +339,6 @@
             }
         }
 
-        /* Очень маленькие экраны */
         @media (max-width: 360px) {
             h1 {
                 font-size: 1.4em;
@@ -352,9 +351,9 @@
             }
             
             .domino-piece {
-                width: 40px;
-                height: 20px;
-                font-size: 0.7em;
+                width: 45px;
+                height: 22px;
+                font-size: 0.8em;
             }
             
             .player {
@@ -368,7 +367,6 @@
             }
         }
 
-        /* Предотвращение выделения текста */
         .no-select {
             -webkit-user-select: none;
             -moz-user-select: none;
@@ -395,7 +393,7 @@
                         <button class="zoom-button" id="resetView">⟳</button>
                     </div>
                     <div class="orientation-preview" id="orientationPreview">
-                        Направление: ↓
+                        Ориентация: 0°
                     </div>
                 </div>
                 
@@ -460,11 +458,11 @@
                 this.canvas = document.getElementById('gameBoard');
                 this.ctx = this.canvas.getContext('2d');
                 
-                // Увеличиваем размер поля
-                this.boardSize = 11;
-                this.baseHexSize = 18;
+                // Размеры поля и шестиугольников
+                this.boardSize = 15; // Увеличиваем поле
+                this.baseHexSize = 20;
                 
-                // Настройки камеры и масштабирования
+                // Настройки камеры
                 this.camera = {
                     x: 0,
                     y: 0,
@@ -473,16 +471,14 @@
                     maxScale: 3
                 };
                 
+                // Игровое состояние
                 this.currentPlayer = 0;
                 this.gamePhase = 'placement';
                 this.selectedPiece = null;
-                this.pieceOrientation = 0;
+                this.pieceOrientation = 0; // 0-5: направления для половинок
                 
-                // Направления для гексагональной сетки
-                this.directionNames = ['↓', '↘', '↙', '↑', '↖', '↗'];
-                
-                // Игровое состояние
-                this.board = [];
+                // Игровые данные
+                this.board = []; // Теперь хранит объекты {value1, value2, orientation, player} или null
                 this.dominoPieces = [];
                 this.usedPieces = [];
                 this.players = [
@@ -496,13 +492,13 @@
                 this.showGrid = true;
                 this.showHighlights = true;
 
-                // Для свайпа и масштабирования
+                // Для управления
                 this.touchStartX = 0;
                 this.touchStartY = 0;
                 this.isDragging = false;
                 this.lastTouchDistance = 0;
                 
-                // Для превью и подсветки
+                // Для превью
                 this.mousePos = { x: 0, y: 0 };
                 this.hoveredHex = null;
                 this.validMoves = [];
@@ -538,13 +534,17 @@
                 const scaleX = container.clientWidth / totalWidth;
                 const scaleY = container.clientHeight / totalHeight;
                 
-                this.camera.scale = Math.min(scaleX, scaleY) * 0.9;
+                this.camera.scale = Math.min(scaleX, scaleY) * 0.8;
                 this.camera.x = container.clientWidth / 2;
                 this.camera.y = container.clientHeight / 2;
             }
             
             initializeGame() {
-                this.board = Array(this.boardSize).fill().map(() => Array(this.boardSize).fill(null));
+                // Инициализируем пустое поле
+                this.board = Array(this.boardSize).fill().map(() => 
+                    Array(this.boardSize).fill(null)
+                );
+                
                 this.currentPlayer = 0;
                 this.gamePhase = 'placement';
                 this.selectedPiece = null;
@@ -577,7 +577,6 @@
                         this.touchStartY = touch.clientY - rect.top;
                         this.isDragging = true;
                         
-                        // Обновляем позицию мыши для превью
                         this.mousePos.x = this.touchStartX;
                         this.mousePos.y = this.touchStartY;
                         this.updateHoveredHex();
@@ -604,7 +603,6 @@
                         const x = touch.clientX - rect.left;
                         const y = touch.clientY - rect.top;
                         
-                        // Обновляем позицию мыши для превью
                         this.mousePos.x = x;
                         this.mousePos.y = y;
                         this.updateHoveredHex();
@@ -655,12 +653,12 @@
                         const deltaX = x - this.touchStartX;
                         const deltaY = y - this.touchStartY;
                         
-                        // Если был клик (маленькое перемещение), обрабатываем как клик
+                        // Если был клик (маленькое перемещение)
                         if (Math.sqrt(deltaX ** 2 + deltaY ** 2) < 10) {
                             const worldPos = this.screenToWorld(x, y);
                             this.handleBoardClick(worldPos.x, worldPos.y);
                         }
-                        // Если был значительный свайп по горизонтали - поворачиваем
+                        // Если был свайп по горизонтали - поворачиваем
                         else if (Math.abs(deltaX) > 30 && Math.abs(deltaY) < 50) {
                             if (deltaX > 0) {
                                 this.rotateRight();
@@ -673,7 +671,7 @@
                     this.isDragging = false;
                 }, { passive: false });
                 
-                // Обработчики мыши для десктопа
+                // Обработчики мыши
                 this.canvas.addEventListener('mousemove', (e) => {
                     const rect = this.canvas.getBoundingClientRect();
                     this.mousePos.x = e.clientX - rect.left;
@@ -702,7 +700,7 @@
                     const deltaX = x - this.touchStartX;
                     const deltaY = y - this.touchStartY;
                     
-                    // Если был клик (маленькое перемещение), обрабатываем как клик
+                    // Если был клик
                     if (Math.sqrt(deltaX ** 2 + deltaY ** 2) < 5) {
                         const worldPos = this.screenToWorld(x, y);
                         this.handleBoardClick(worldPos.x, worldPos.y);
@@ -752,7 +750,6 @@
                     if (e.key === 'q' || e.key === 'й' || e.key === 'ArrowLeft') this.rotateLeft();
                 });
 
-                // Адаптация к изменению размера окна
                 window.addEventListener('resize', () => {
                     setTimeout(() => {
                         this.setCanvasSize();
@@ -760,7 +757,6 @@
                     }, 100);
                 });
 
-                // Предотвращение контекстного меню
                 this.canvas.addEventListener('contextmenu', (e) => {
                     e.preventDefault();
                     return false;
@@ -857,7 +853,7 @@
                         palette.appendChild(pieceElement);
                     });
                     
-                    // Автоматически выбираем первую костяшку, если ничего не выбрано
+                    // Автоматически выбираем первую костяшку
                     if (!this.selectedPiece && currentPlayerPieces.length > 0) {
                         this.selectedPiece = currentPlayerPieces[0];
                         this.calculateValidMoves();
@@ -886,7 +882,7 @@
             
             updateOrientationPreview() {
                 const preview = document.getElementById('orientationPreview');
-                preview.textContent = `Направление: ${this.directionNames[this.pieceOrientation]}`;
+                preview.textContent = `Ориентация: ${this.pieceOrientation * 60}°`;
             }
             
             toggleNumbers() {
@@ -952,32 +948,32 @@
                 return null;
             }
             
-            getNextHexInDirection(row, col, direction) {
+            getNeighborInDirection(row, col, direction) {
                 const directions = [
-                    () => ({ row: row + 1, col: col }),
-                    () => {
+                    () => ({ row: row + 1, col: col }), // вниз
+                    () => { // вниз-вправо
                         if (col % 2 === 0) {
                             return { row: row, col: col + 1 };
                         } else {
                             return { row: row + 1, col: col + 1 };
                         }
                     },
-                    () => {
+                    () => { // вверх-вправо
                         if (col % 2 === 0) {
                             return { row: row - 1, col: col + 1 };
                         } else {
                             return { row: row, col: col + 1 };
                         }
                     },
-                    () => ({ row: row - 1, col: col }),
-                    () => {
+                    () => ({ row: row - 1, col: col }), // вверх
+                    () => { // вверх-влево
                         if (col % 2 === 0) {
                             return { row: row - 1, col: col - 1 };
                         } else {
                             return { row: row, col: col - 1 };
                         }
                     },
-                    () => {
+                    () => { // вниз-влево
                         if (col % 2 === 0) {
                             return { row: row, col: col - 1 };
                         } else {
@@ -1011,12 +1007,8 @@
             }
             
             canPlaceDomino(row, col, piece, orientation) {
-                const secondPos = this.getNextHexInDirection(row, col, orientation);
-                if (!secondPos || !this.isValidPosition(secondPos.row, secondPos.col)) {
-                    return false;
-                }
-                
-                if (this.board[row][col] !== null || this.board[secondPos.row][secondPos.col] !== null) {
+                // Проверяем, что клетка свободна
+                if (this.board[row][col] !== null) {
                     return false;
                 }
                 
@@ -1025,48 +1017,64 @@
                     return true;
                 }
                 
-                const neighbors1 = this.getNeighborCells(row, col);
-                const neighbors2 = this.getNeighborCells(secondPos.row, secondPos.col);
+                // Проверяем соседей
+                const hasValidConnection = this.checkNeighborConnections(row, col, piece, orientation);
                 
-                let hasValidConnection = false;
-                
-                for (const neighbor of neighbors1) {
-                    if (this.board[neighbor.row][neighbor.col] !== null) {
-                        const neighborValue = this.board[neighbor.row][neighbor.col];
-                        if (neighborValue !== piece.values[0]) {
-                            return false;
-                        }
-                        hasValidConnection = true;
-                    }
-                }
-                
-                for (const neighbor of neighbors2) {
-                    if (this.board[neighbor.row][neighbor.col] !== null) {
-                        const neighborValue = this.board[neighbor.row][neighbor.col];
-                        if (neighborValue !== piece.values[1]) {
-                            return false;
-                        }
-                        hasValidConnection = true;
-                    }
-                }
-                
-                // После первого хода должна быть хотя бы одна связь
-                if (!hasValidConnection) {
-                    return false;
-                }
-                
-                return true;
+                return hasValidConnection;
             }
             
-            getNeighborCells(row, col) {
-                const neighbors = [];
-                for (let direction = 0; direction < 6; direction++) {
-                    const neighbor = this.getNextHexInDirection(row, col, direction);
-                    if (neighbor && this.isValidPosition(neighbor.row, neighbor.col)) {
-                        neighbors.push(neighbor);
+            checkNeighborConnections(row, col, piece, orientation) {
+                // Проверяем все 6 направлений
+                for (let dir = 0; dir < 6; dir++) {
+                    const neighbor = this.getNeighborInDirection(row, col, dir);
+                    if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) {
+                        continue;
+                    }
+                    
+                    const neighborCell = this.board[neighbor.row][neighbor.col];
+                    if (neighborCell === null) {
+                        continue;
+                    }
+                    
+                    // Определяем, какая половина текущей костяшки обращена к соседу
+                    const currentHalf = this.getHalfFacingDirection(orientation, dir);
+                    const currentValue = piece.values[currentHalf];
+                    
+                    // Определяем, какая половина соседа обращена к текущей клетке
+                    const neighborFacingDir = (dir + 3) % 6; // противоположное направление
+                    const neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, neighborFacingDir);
+                    const neighborValue = neighborCell.values[neighborHalf];
+                    
+                    // Если значения совпадают - это валидное соединение
+                    if (currentValue === neighborValue) {
+                        return true;
                     }
                 }
-                return neighbors;
+                
+                return false;
+            }
+            
+            getHalfFacingDirection(pieceOrientation, direction) {
+                // Определяем, какая половина костяшки (0 или 1) обращена в заданном направлении
+                // Ориентация 0: половина 0 смотрит в направлении 0, половина 1 - в направлении 3
+                const half0Direction = pieceOrientation;
+                const half1Direction = (pieceOrientation + 3) % 6;
+                
+                if (direction === half0Direction) return 0;
+                if (direction === half1Direction) return 1;
+                
+                // Если направление не совпадает точно с ориентацией половинок,
+                // выбираем ближайшую половину
+                const diff0 = Math.min(
+                    Math.abs(direction - half0Direction),
+                    6 - Math.abs(direction - half0Direction)
+                );
+                const diff1 = Math.min(
+                    Math.abs(direction - half1Direction),
+                    6 - Math.abs(direction - half1Direction)
+                );
+                
+                return diff0 < diff1 ? 0 : 1;
             }
             
             handleBoardClick(worldX, worldY) {
@@ -1081,16 +1089,17 @@
             }
             
             placeDomino(row, col, piece, orientation) {
-                const secondPos = this.getNextHexInDirection(row, col, orientation);
-                
-                this.board[row][col] = piece.values[0];
-                this.board[secondPos.row][secondPos.col] = piece.values[1];
+                // Размещаем костяшку в одной клетке
+                this.board[row][col] = {
+                    values: [...piece.values],
+                    orientation: orientation,
+                    player: this.currentPlayer
+                };
                 
                 piece.used = true;
                 this.usedPieces.push({
                     piece: piece,
-                    position1: { row, col },
-                    position2: secondPos,
+                    position: { row, col },
                     orientation: orientation,
                     player: this.currentPlayer
                 });
@@ -1107,66 +1116,32 @@
                 this.selectedPiece = null;
                 this.validMoves = [];
                 
-                // Проверяем, остались ли костяшки у текущего игрока
-                const currentPlayerHasPieces = this.players[this.currentPlayer].pieces.length > 0;
+                // Проверяем окончание игры
+                this.checkGameEnd();
                 
-                if (currentPlayerHasPieces) {
+                if (this.gamePhase !== 'gameover') {
                     // Передаем ход следующему игроку
                     this.currentPlayer = (this.currentPlayer + 1) % 2;
-                } else {
-                    // Если у текущего игрока не осталось костяшек, проверяем другого игрока
-                    const otherPlayer = (this.currentPlayer + 1) % 2;
-                    if (this.players[otherPlayer].pieces.length > 0) {
-                        this.currentPlayer = otherPlayer;
-                    } else {
-                        // Если у обоих игроков не осталось костяшек - игра завершается
-                        this.gamePhase = 'gameover';
-                        this.updateGamePhase();
-                        setTimeout(() => {
-                            const winner = this.players[0].score > this.players[1].score ? 1 : 
-                                         this.players[1].score > this.players[0].score ? 2 : 0;
-                            if (winner === 0) {
-                                alert('Ничья!');
-                            } else {
-                                alert(`Игрок ${winner} победил со счетом ${this.players[winner-1].score}!`);
-                            }
-                        }, 500);
-                        this.updateGamePhase();
-                        this.updateScores();
-                        this.updateDominoPalette();
-                        this.drawBoard();
-                        return;
-                    }
-                }
-                
-                // Проверяем, может ли текущий игрок сделать ход
-                const currentPlayerCanMove = this.players[this.currentPlayer].pieces.some(p => 
-                    this.hasValidMove(p)
-                );
-                
-                if (!currentPlayerCanMove) {
-                    // Если текущий игрок не может сделать ход, проверяем другого игрока
-                    const otherPlayer = (this.currentPlayer + 1) % 2;
-                    const otherPlayerCanMove = this.players[otherPlayer].pieces.some(p => 
+                    
+                    // Проверяем, может ли текущий игрок сделать ход
+                    const currentPlayerCanMove = this.players[this.currentPlayer].pieces.some(p => 
                         this.hasValidMove(p)
                     );
                     
-                    if (!otherPlayerCanMove) {
-                        // Если оба игрока не могут сделать ход - игра завершается
-                        this.gamePhase = 'gameover';
-                        this.updateGamePhase();
-                        setTimeout(() => {
-                            const winner = this.players[0].score > this.players[1].score ? 1 : 
-                                         this.players[1].score > this.players[0].score ? 2 : 0;
-                            if (winner === 0) {
-                                alert('Ничья!');
-                            } else {
-                                alert(`Игрок ${winner} победил со счетом ${this.players[winner-1].score}!`);
-                            }
-                        }, 500);
-                    } else {
-                        // Если другой игрок может сделать ход, передаем ход ему
-                        this.currentPlayer = otherPlayer;
+                    if (!currentPlayerCanMove) {
+                        // Если не может, проверяем другого игрока
+                        const otherPlayer = (this.currentPlayer + 1) % 2;
+                        const otherPlayerCanMove = this.players[otherPlayer].pieces.some(p => 
+                            this.hasValidMove(p)
+                        );
+                        
+                        if (!otherPlayerCanMove) {
+                            // Если оба не могут - игра завершается
+                            this.gamePhase = 'gameover';
+                        } else {
+                            // Если другой может - передаем ход ему
+                            this.currentPlayer = otherPlayer;
+                        }
                     }
                 }
                 
@@ -1188,6 +1163,23 @@
                     }
                 }
                 return false;
+            }
+            
+            checkGameEnd() {
+                // Игра завершается, когда у обоих игроков не осталось костяшек
+                // или когда никто не может сделать ход
+                if (this.players[0].pieces.length === 0 && this.players[1].pieces.length === 0) {
+                    this.gamePhase = 'gameover';
+                    setTimeout(() => {
+                        const winner = this.players[0].score > this.players[1].score ? 1 : 
+                                     this.players[1].score > this.players[0].score ? 2 : 0;
+                        if (winner === 0) {
+                            alert('Ничья!');
+                        } else {
+                            alert(`Игрок ${winner} победил со счетом ${this.players[winner-1].score}!`);
+                        }
+                    }, 500);
+                }
             }
             
             updateGamePhase() {
@@ -1224,23 +1216,15 @@
                 
                 // Рисуем сетку
                 if (this.showGrid) {
-                    for (let row = 0; row < this.boardSize; row++) {
-                        for (let col = 0; col < this.boardSize; col++) {
-                            const center = this.getHexCenter(row, col);
-                            const screenPos = this.worldToScreen(center.x, center.y);
-                            this.drawHex(this.ctx, screenPos.x, screenPos.y, center.hexSize, row, col);
-                        }
-                    }
+                    this.drawGrid();
                 }
+                
+                // Рисуем размещенные костяшки
+                this.drawPlacedDominos();
                 
                 // Подсвечиваем допустимые ходы
                 if (this.selectedPiece && this.showHighlights) {
                     this.drawValidMoves();
-                }
-                
-                // Рисуем линии между костяшками
-                if (this.showLines) {
-                    this.drawDominoLines();
                 }
                 
                 // Рисуем превью размещения
@@ -1252,37 +1236,107 @@
                 this.ctx.restore();
             }
             
-            drawHex(ctx, x, y, hexSize, row, col) {
-                ctx.beginPath();
+            drawGrid() {
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        const center = this.getHexCenter(row, col);
+                        const screenPos = this.worldToScreen(center.x, center.y);
+                        this.drawEmptyHex(screenPos.x, screenPos.y, center.hexSize);
+                    }
+                }
+            }
+            
+            drawEmptyHex(x, y, hexSize) {
+                this.ctx.beginPath();
                 for (let i = 0; i < 6; i++) {
                     const angle = Math.PI / 3 * i;
                     const hexX = x + hexSize * Math.cos(angle);
                     const hexY = y + hexSize * Math.sin(angle);
-                    if (i === 0) ctx.moveTo(hexX, hexY);
-                    else ctx.lineTo(hexX, hexY);
+                    if (i === 0) this.ctx.moveTo(hexX, hexY);
+                    else this.ctx.lineTo(hexX, hexY);
                 }
-                ctx.closePath();
+                this.ctx.closePath();
                 
-                const cellValue = this.board[row][col];
-                if (cellValue !== null) {
-                    const hue = (cellValue * 60) % 360;
-                    ctx.fillStyle = `hsla(${hue}, 70%, 50%, 0.7)`;
-                } else {
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                this.ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                this.ctx.fill();
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
+            }
+            
+            drawPlacedDominos() {
+                for (let row = 0; row < this.boardSize; row++) {
+                    for (let col = 0; col < this.boardSize; col++) {
+                        const cell = this.board[row][col];
+                        if (cell !== null) {
+                            const center = this.getHexCenter(row, col);
+                            const screenPos = this.worldToScreen(center.x, center.y);
+                            this.drawDominoInHex(screenPos.x, screenPos.y, center.hexSize, cell);
+                        }
+                    }
                 }
+            }
+            
+            drawDominoInHex(x, y, hexSize, domino) {
+                const orientation = domino.orientation;
+                const values = domino.values;
+                const player = domino.player;
                 
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-                ctx.lineWidth = 1;
-                ctx.stroke();
+                // Рисуем шестиугольник
+                this.ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    const angle = Math.PI / 3 * i;
+                    const hexX = x + hexSize * Math.cos(angle);
+                    const hexY = y + hexSize * Math.sin(angle);
+                    if (i === 0) this.ctx.moveTo(hexX, hexY);
+                    else this.ctx.lineTo(hexX, hexY);
+                }
+                this.ctx.closePath();
                 
-                if (this.showNumbers && cellValue !== null) {
-                    ctx.fillStyle = 'white';
-                    const fontSize = Math.max(8, hexSize * 0.5);
-                    ctx.font = `bold ${fontSize}px Arial`;
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(cellValue.toString(), x, y);
+                // Заливаем цветом игрока
+                const playerColor = player === 0 ? 
+                    'rgba(255, 107, 107, 0.7)' : 'rgba(78, 205, 196, 0.7)';
+                this.ctx.fillStyle = playerColor;
+                this.ctx.fill();
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+                
+                // Рисуем разделительную линию
+                const angle1 = Math.PI / 3 * orientation;
+                const angle2 = Math.PI / 3 * ((orientation + 3) % 6);
+                
+                this.ctx.beginPath();
+                this.ctx.moveTo(
+                    x + hexSize * 0.7 * Math.cos(angle1),
+                    y + hexSize * 0.7 * Math.sin(angle1)
+                );
+                this.ctx.lineTo(x, y);
+                this.ctx.lineTo(
+                    x + hexSize * 0.7 * Math.cos(angle2),
+                    y + hexSize * 0.7 * Math.sin(angle2)
+                );
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+                
+                // Рисуем числа
+                if (this.showNumbers) {
+                    this.ctx.fillStyle = 'white';
+                    const fontSize = Math.max(10, hexSize * 0.4);
+                    this.ctx.font = `bold ${fontSize}px Arial`;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    
+                    // Первое число (в направлении ориентации)
+                    const text1X = x + hexSize * 0.4 * Math.cos(angle1);
+                    const text1Y = y + hexSize * 0.4 * Math.sin(angle1);
+                    this.ctx.fillText(values[0].toString(), text1X, text1Y);
+                    
+                    // Второе число (в противоположном направлении)
+                    const text2X = x + hexSize * 0.4 * Math.cos(angle2);
+                    const text2Y = y + hexSize * 0.4 * Math.sin(angle2);
+                    this.ctx.fillText(values[1].toString(), text2X, text2Y);
                 }
             }
             
@@ -1317,74 +1371,64 @@
                 
                 if (!isValid) return;
                 
-                const center1 = this.getHexCenter(this.hoveredHex.row, this.hoveredHex.col);
-                const secondPos = this.getNextHexInDirection(this.hoveredHex.row, this.hoveredHex.col, this.pieceOrientation);
-                const center2 = this.getHexCenter(secondPos.row, secondPos.col);
-                
-                const screen1 = this.worldToScreen(center1.x, center1.y);
-                const screen2 = this.worldToScreen(center2.x, center2.y);
+                const center = this.getHexCenter(this.hoveredHex.row, this.hoveredHex.col);
+                const screenPos = this.worldToScreen(center.x, center.y);
                 
                 this.ctx.save();
                 this.ctx.globalAlpha = 0.6;
                 
-                // Рисуем линию между клетками
+                // Рисуем контур превью
                 this.ctx.strokeStyle = '#FFD700';
                 this.ctx.lineWidth = 3;
                 this.ctx.setLineDash([5, 5]);
                 this.ctx.beginPath();
-                this.ctx.moveTo(screen1.x, screen1.y);
-                this.ctx.lineTo(screen2.x, screen2.y);
+                for (let i = 0; i < 6; i++) {
+                    const angle = Math.PI / 3 * i;
+                    const hexX = screenPos.x + center.hexSize * Math.cos(angle);
+                    const hexY = screenPos.y + center.hexSize * Math.sin(angle);
+                    if (i === 0) this.ctx.moveTo(hexX, hexY);
+                    else this.ctx.lineTo(hexX, hexY);
+                }
+                this.ctx.closePath();
                 this.ctx.stroke();
                 this.ctx.setLineDash([]);
                 
-                // Рисуем кружки на концах
-                this.ctx.fillStyle = '#FFD700';
-                this.ctx.beginPath();
-                this.ctx.arc(screen1.x, screen1.y, 5, 0, Math.PI * 2);
-                this.ctx.fill();
+                // Рисуем разделительную линию
+                const angle1 = Math.PI / 3 * this.pieceOrientation;
+                const angle2 = Math.PI / 3 * ((this.pieceOrientation + 3) % 6);
                 
                 this.ctx.beginPath();
-                this.ctx.arc(screen2.x, screen2.y, 5, 0, Math.PI * 2);
-                this.ctx.fill();
+                this.ctx.moveTo(
+                    screenPos.x + center.hexSize * 0.7 * Math.cos(angle1),
+                    screenPos.y + center.hexSize * 0.7 * Math.sin(angle1)
+                );
+                this.ctx.lineTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(
+                    screenPos.x + center.hexSize * 0.7 * Math.cos(angle2),
+                    screenPos.y + center.hexSize * 0.7 * Math.sin(angle2)
+                );
+                this.ctx.strokeStyle = '#FFD700';
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
                 
-                // Рисуем значения костяшки
+                // Рисуем числа
                 if (this.showNumbers) {
                     this.ctx.fillStyle = '#FFD700';
-                    const fontSize = Math.max(10, center1.hexSize * 0.6);
+                    const fontSize = Math.max(10, center.hexSize * 0.4);
                     this.ctx.font = `bold ${fontSize}px Arial`;
                     this.ctx.textAlign = 'center';
                     this.ctx.textBaseline = 'middle';
-                    this.ctx.fillText(this.selectedPiece.values[0].toString(), screen1.x, screen1.y);
-                    this.ctx.fillText(this.selectedPiece.values[1].toString(), screen2.x, screen2.y);
+                    
+                    const text1X = screenPos.x + center.hexSize * 0.4 * Math.cos(angle1);
+                    const text1Y = screenPos.y + center.hexSize * 0.4 * Math.sin(angle1);
+                    this.ctx.fillText(this.selectedPiece.values[0].toString(), text1X, text1Y);
+                    
+                    const text2X = screenPos.x + center.hexSize * 0.4 * Math.cos(angle2);
+                    const text2Y = screenPos.y + center.hexSize * 0.4 * Math.sin(angle2);
+                    this.ctx.fillText(this.selectedPiece.values[1].toString(), text2X, text2Y);
                 }
                 
                 this.ctx.restore();
-            }
-            
-            drawDominoLines() {
-                this.usedPieces.forEach(domino => {
-                    const center1 = this.getHexCenter(domino.position1.row, domino.position1.col);
-                    const center2 = this.getHexCenter(domino.position2.row, domino.position2.col);
-                    
-                    const screen1 = this.worldToScreen(center1.x, center1.y);
-                    const screen2 = this.worldToScreen(center2.x, center2.y);
-                    
-                    this.ctx.strokeStyle = domino.player === 0 ? '#FF6B6B' : '#4ECDC4';
-                    this.ctx.lineWidth = 2;
-                    this.ctx.setLineDash([]);
-                    
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(screen1.x, screen1.y);
-                    this.ctx.lineTo(screen2.x, screen2.y);
-                    this.ctx.stroke();
-                    
-                    this.ctx.fillStyle = domino.player === 0 ? '#FF6B6B' : '#4ECDC4';
-                    this.ctx.beginPath();
-                    const midX = (screen1.x + screen2.x) / 2;
-                    const midY = (screen1.y + screen2.y) / 2;
-                    this.ctx.arc(midX, midY, 3, 0, Math.PI * 2);
-                    this.ctx.fill();
-                });
             }
         }
 
