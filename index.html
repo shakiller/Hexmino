@@ -412,8 +412,6 @@
                     <h3>🎮 Управление</h3>
                     <div class="buttons-grid">
                         <button class="control-button" id="newGameBtn">Новая игра</button>
-                        <button class="control-button" id="rotateLeft">↶ Повернуть (←)</button>
-                        <button class="control-button" id="rotateRight">↷ Повернуть (→)</button>
                         <button class="control-button" id="shufflePieces">🔀 Перемешать</button>
                     </div>
                 </div>
@@ -507,8 +505,13 @@
                 this.setupEventListeners();
                 this.createDominoPieces();
                 this.dealPieces();
-                this.setCanvasSize();
-                this.drawBoard();
+                
+                // Устанавливаем размеры canvas и центрируем камеру
+                // Используем requestAnimationFrame чтобы убедиться, что DOM готов
+                requestAnimationFrame(() => {
+                    this.setCanvasSize();
+                    this.drawBoard();
+                });
             }
             
             setCanvasSize() {
@@ -516,27 +519,47 @@
                 const width = container.clientWidth;
                 const height = container.clientHeight;
                 
+                if (width === 0 || height === 0) {
+                    // Контейнер еще не имеет размеров, попробуем позже
+                    setTimeout(() => this.setCanvasSize(), 100);
+                    return;
+                }
+                
                 const dpr = window.devicePixelRatio || 1;
+                
+                // Устанавливаем размеры canvas
                 this.canvas.width = width * dpr;
                 this.canvas.height = height * dpr;
                 this.canvas.style.width = width + 'px';
                 this.canvas.style.height = height + 'px';
+                
+                // Сбрасываем контекст и применяем DPR масштаб
+                this.ctx.setTransform(1, 0, 0, 1, 0, 0); // Сброс трансформаций
                 this.ctx.scale(dpr, dpr);
                 
+                // Центрируем камеру после установки размеров
                 this.centerCamera();
             }
             
             centerCamera() {
+                // Вычисляем центр игрового поля в мировых координатах
                 const totalWidth = this.boardSize * this.baseHexSize * 1.5;
                 const totalHeight = this.boardSize * this.baseHexSize * Math.sqrt(3);
+                const worldCenterX = totalWidth / 2;
+                const worldCenterY = totalHeight / 2;
                 
                 const container = this.canvas.parentElement;
-                const scaleX = container.clientWidth / totalWidth;
-                const scaleY = container.clientHeight / totalHeight;
+                const canvasWidth = container.clientWidth;
+                const canvasHeight = container.clientHeight;
                 
+                // Вычисляем масштаб так, чтобы поле помещалось на экран
+                const scaleX = canvasWidth / totalWidth;
+                const scaleY = canvasHeight / totalHeight;
                 this.camera.scale = Math.min(scaleX, scaleY) * 0.8;
-                this.camera.x = container.clientWidth / 2;
-                this.camera.y = container.clientHeight / 2;
+                
+                // Центрируем камеру: центр поля должен быть в центре экрана
+                this.camera.x = canvasWidth / 2 - worldCenterX * this.camera.scale;
+                this.camera.y = canvasHeight / 2 - worldCenterY * this.camera.scale;
             }
             
             initializeGame() {
@@ -562,7 +585,6 @@
                 this.centerCamera();
                 this.updateGamePhase();
                 this.updateScores();
-                this.updateOrientationPreview();
                 this.drawBoard();
             }
             
@@ -607,11 +629,12 @@
                         this.mousePos.y = y;
                         this.updateHoveredHex();
                         
+                        // Перемещение камеры: движение в пикселях экрана напрямую
                         const deltaX = x - this.touchStartX;
                         const deltaY = y - this.touchStartY;
                         
-                        this.camera.x -= deltaX / this.camera.scale;
-                        this.camera.y -= deltaY / this.camera.scale;
+                        this.camera.x += deltaX;
+                        this.camera.y += deltaY;
                         
                         this.touchStartX = x;
                         this.touchStartY = y;
@@ -630,12 +653,11 @@
                         const distance = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
                         const scaleChange = distance / this.lastTouchDistance;
                         
-                        const worldCenter = this.screenToWorld(
-                            (x1 + x2) / 2,
-                            (y1 + y2) / 2
-                        );
+                        // Центр между двумя точками на экране (в пикселях экрана)
+                        const screenCenterX = (x1 + x2) / 2;
+                        const screenCenterY = (y1 + y2) / 2;
                         
-                        this.zoom(scaleChange, worldCenter.x, worldCenter.y);
+                        this.zoom(scaleChange, screenCenterX, screenCenterY);
                         
                         this.lastTouchDistance = distance;
                     }
@@ -658,26 +680,38 @@
                             const worldPos = this.screenToWorld(x, y);
                             this.handleBoardClick(worldPos.x, worldPos.y);
                         }
-                        // Если был свайп по горизонтали - поворачиваем
-                        else if (Math.abs(deltaX) > 30 && Math.abs(deltaY) < 50) {
-                            if (deltaX > 0) {
-                                this.rotateRight();
-                            } else {
-                                this.rotateLeft();
-                            }
-                        }
+                        // Свайп больше не используется для поворота (ориентация определяется автоматически)
                     }
                     
                     this.isDragging = false;
                 }, { passive: false });
                 
                 // Обработчики мыши
+                let isMouseDragging = false;
+                let mouseStartX = 0;
+                let mouseStartY = 0;
+                
                 this.canvas.addEventListener('mousemove', (e) => {
                     const rect = this.canvas.getBoundingClientRect();
-                    this.mousePos.x = e.clientX - rect.left;
-                    this.mousePos.y = e.clientY - rect.top;
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
                     
+                    this.mousePos.x = x;
+                    this.mousePos.y = y;
                     this.updateHoveredHex();
+                    
+                    // Перетаскивание камеры мышью
+                    if (isMouseDragging) {
+                        const deltaX = x - mouseStartX;
+                        const deltaY = y - mouseStartY;
+                        
+                        this.camera.x += deltaX;
+                        this.camera.y += deltaY;
+                        
+                        mouseStartX = x;
+                        mouseStartY = y;
+                    }
+                    
                     this.drawBoard();
                 });
                 
@@ -685,20 +719,20 @@
                     const rect = this.canvas.getBoundingClientRect();
                     const x = e.clientX - rect.left;
                     const y = e.clientY - rect.top;
-                    this.touchStartX = x;
-                    this.touchStartY = y;
-                    this.isDragging = true;
+                    mouseStartX = x;
+                    mouseStartY = y;
+                    isMouseDragging = true;
                 });
                 
                 this.canvas.addEventListener('mouseup', (e) => {
-                    if (!this.isDragging) return;
+                    if (!isMouseDragging) return;
                     
                     const rect = this.canvas.getBoundingClientRect();
                     const x = e.clientX - rect.left;
                     const y = e.clientY - rect.top;
                     
-                    const deltaX = x - this.touchStartX;
-                    const deltaY = y - this.touchStartY;
+                    const deltaX = x - mouseStartX;
+                    const deltaY = y - mouseStartY;
                     
                     // Если был клик
                     if (Math.sqrt(deltaX ** 2 + deltaY ** 2) < 5) {
@@ -706,7 +740,11 @@
                         this.handleBoardClick(worldPos.x, worldPos.y);
                     }
                     
-                    this.isDragging = false;
+                    isMouseDragging = false;
+                });
+                
+                this.canvas.addEventListener('mouseleave', () => {
+                    isMouseDragging = false;
                 });
                 
                 this.canvas.addEventListener('wheel', (e) => {
@@ -723,8 +761,6 @@
                 
                 // Кнопки управления
                 document.getElementById('newGameBtn').addEventListener('click', () => this.initializeGame());
-                document.getElementById('rotateLeft').addEventListener('click', () => this.rotateLeft());
-                document.getElementById('rotateRight').addEventListener('click', () => this.rotateRight());
                 document.getElementById('shufflePieces').addEventListener('click', () => this.shufflePlayerPieces());
                 document.getElementById('toggleNumbers').addEventListener('click', () => this.toggleNumbers());
                 document.getElementById('toggleLines').addEventListener('click', () => this.toggleLines());
@@ -733,22 +769,20 @@
                 
                 // Кнопки масштабирования
                 document.getElementById('zoomIn').addEventListener('click', () => {
-                    const center = this.screenToWorld(this.canvas.width / 2, this.canvas.height / 2);
-                    this.zoom(1.2, center.x, center.y);
+                    const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
+                    const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+                    this.zoom(1.2, canvasWidth / 2, canvasHeight / 2);
                 });
                 
                 document.getElementById('zoomOut').addEventListener('click', () => {
-                    const center = this.screenToWorld(this.canvas.width / 2, this.canvas.height / 2);
-                    this.zoom(0.8, center.x, center.y);
+                    const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
+                    const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+                    this.zoom(0.8, canvasWidth / 2, canvasHeight / 2);
                 });
                 
                 document.getElementById('resetView').addEventListener('click', () => this.centerCamera());
                 
-                // Горячие клавиши
-                document.addEventListener('keydown', (e) => {
-                    if (e.key === 'r' || e.key === 'к' || e.key === 'ArrowRight') this.rotateRight();
-                    if (e.key === 'q' || e.key === 'й' || e.key === 'ArrowLeft') this.rotateLeft();
-                });
+                // Горячие клавиши (поворот больше не используется)
 
                 window.addEventListener('resize', () => {
                     setTimeout(() => {
@@ -769,33 +803,40 @@
             }
             
             screenToWorld(screenX, screenY) {
+                // Преобразуем координаты экрана в мировые координаты
+                // Сначала вычитаем смещение камеры, затем делим на масштаб
                 return {
-                    x: (screenX - this.camera.x) / this.camera.scale + this.camera.x,
-                    y: (screenY - this.camera.y) / this.camera.scale + this.camera.y
+                    x: (screenX - this.camera.x) / this.camera.scale,
+                    y: (screenY - this.camera.y) / this.camera.scale
                 };
             }
             
             worldToScreen(worldX, worldY) {
+                // Преобразуем мировые координаты в координаты экрана
+                // Сначала умножаем на масштаб, затем добавляем смещение камеры
                 return {
-                    x: (worldX - this.camera.x) * this.camera.scale + this.camera.x,
-                    y: (worldY - this.camera.y) * this.camera.scale + this.camera.y
+                    x: worldX * this.camera.scale + this.camera.x,
+                    y: worldY * this.camera.scale + this.camera.y
                 };
             }
             
             zoom(factor, centerX, centerY) {
+                // centerX, centerY - координаты точки на экране, относительно которой масштабируем
                 const newScale = this.camera.scale * factor;
                 
                 if (newScale >= this.camera.minScale && newScale <= this.camera.maxScale) {
-                    const worldCenterBefore = {
-                        x: (centerX - this.camera.x) / this.camera.scale + this.camera.x,
-                        y: (centerY - this.camera.y) / this.camera.scale + this.camera.y
-                    };
+                    // Преобразуем точку на экране в мировые координаты ДО изменения масштаба
+                    const worldPoint = this.screenToWorld(centerX, centerY);
                     
+                    // Изменяем масштаб
                     this.camera.scale = newScale;
                     
-                    const screenCenterAfter = this.worldToScreen(worldCenterBefore.x, worldCenterBefore.y);
-                    this.camera.x += centerX - screenCenterAfter.x;
-                    this.camera.y += centerY - screenCenterAfter.y;
+                    // Вычисляем, где теперь находится эта точка после масштабирования
+                    const screenPointAfter = this.worldToScreen(worldPoint.x, worldPoint.y);
+                    
+                    // Сдвигаем камеру так, чтобы точка осталась на месте
+                    this.camera.x += centerX - screenPointAfter.x;
+                    this.camera.y += centerY - screenPointAfter.y;
                     
                     this.drawBoard();
                 }
@@ -866,24 +907,7 @@
                     this.players[1].pieces.length;
             }
             
-            rotateLeft() {
-                this.pieceOrientation = (this.pieceOrientation + 5) % 6;
-                this.updateOrientationPreview();
-                this.calculateValidMoves();
-                this.drawBoard();
-            }
-            
-            rotateRight() {
-                this.pieceOrientation = (this.pieceOrientation + 1) % 6;
-                this.updateOrientationPreview();
-                this.calculateValidMoves();
-                this.drawBoard();
-            }
-            
-            updateOrientationPreview() {
-                const preview = document.getElementById('orientationPreview');
-                preview.textContent = `Ориентация: ${this.pieceOrientation * 60}°`;
-            }
+            // Функции поворота больше не используются - ориентация определяется автоматически
             
             toggleNumbers() {
                 this.showNumbers = !this.showNumbers;
@@ -999,8 +1023,148 @@
                 
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
-                        if (this.canPlaceDomino(row, col, this.selectedPiece, this.pieceOrientation)) {
-                            this.validMoves.push({ row, col });
+                        // Проверяем все возможные ориентации, чтобы найти правильную
+                        let validOrientation = null;
+                        
+                        // Проверяем все ориентации и находим правильную
+                        // Для первого хода берем ориентацию 0
+                        if (this.usedPieces.length === 0) {
+                            validOrientation = 0;
+                        } else {
+                            // Для последующих ходов проверяем все ориентации и находим правильную
+                            let bestOrientation = null;
+                            
+                            // Сначала проверяем, что клетка свободна
+                            if (this.board[row][col] !== null) {
+                                continue; // Клетка занята, пропускаем
+                            }
+                            
+                            // Проверяем, есть ли соседи
+                            let hasNeighbors = false;
+                            for (let dir = 0; dir < 6; dir++) {
+                                const neighbor = this.getNeighborInDirection(row, col, dir);
+                                if (neighbor && this.isValidPosition(neighbor.row, neighbor.col)) {
+                                    const neighborCell = this.board[neighbor.row][neighbor.col];
+                                    if (neighborCell !== null) {
+                                        hasNeighbors = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // Если нет соседей, это невалидный ход (кроме первого хода)
+                            if (!hasNeighbors) {
+                                continue;
+                            }
+                            
+                            // Проверяем все ориентации и находим правильную
+                            for (let orientation = 0; orientation < 6; orientation++) {
+                                let allConnectionsCorrect = true;
+                                
+                                // Проверяем всех соседей
+                                for (let dir = 0; dir < 6; dir++) {
+                                    const neighbor = this.getNeighborInDirection(row, col, dir);
+                                    if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) {
+                                        continue;
+                                    }
+                                    
+                                    const neighborCell = this.board[neighbor.row][neighbor.col];
+                                    if (neighborCell === null) {
+                                        continue;
+                                    }
+                                    
+                                    // Определяем индексы вершин, в направлении которых смотрят половинки размещаемой костяшки
+                                    // Ориентация 0: половина 0 смотрит на вершину 0, половина 1 - на вершину 3
+                                    const half0Vertex = orientation; // вершина, в направлении которой смотрит половина 0
+                                    const half1Vertex = (orientation + 3) % 6; // вершина, в направлении которой смотрит половина 1
+                                    
+                                    // Точный индекс вершины по направлению к соседу
+                                    const neighborVertexIndex = this.vertexIndexTowardNeighbor(row, col, dir);
+                                    if (neighborVertexIndex === null) {
+                                        allConnectionsCorrect = false;
+                                        break;
+                                    }
+                                    
+                                    // Проверяем, правильно ли повернута костяшка для соединения
+                                    if (neighborCell.values[0] === neighborCell.values[1]) {
+                                        // Сосед - дубль (например, 0:0)
+                                        const neighborValue = neighborCell.values[0];
+                                        
+                                        // Для дубля сторона с нужным значением должна быть обращена точно к нему
+                                        let currentValue = null;
+                                        if (neighborVertexIndex === half0Vertex) {
+                                            // Вершина половины 0 точно обращена к дублю
+                                            currentValue = this.selectedPiece.values[0];
+                                        } else if (neighborVertexIndex === half1Vertex) {
+                                            // Вершина половины 1 точно обращена к дублю
+                                            currentValue = this.selectedPiece.values[1];
+                                        } else {
+                                            // Ни одна сторона не обращена точно — ориентация не подходит
+                                            allConnectionsCorrect = false;
+                                            break;
+                                        }
+                                        
+                                        if (currentValue !== neighborValue) {
+                                            allConnectionsCorrect = false;
+                                            break;
+                                        }
+                                    } else {
+                                        // Сосед - обычная костяшка
+                                        // Противоположное направление (от соседа к размещаемой костяшке)
+                                        const neighborFacingDir = (dir + 3) % 6;
+                                        const neighborFacingVertex = this.vertexIndexTowardNeighbor(neighbor.row, neighbor.col, neighborFacingDir);
+                                        if (neighborFacingVertex === null) {
+                                            allConnectionsCorrect = false;
+                                            break;
+                                        }
+                                        
+                                        // Определяем, какая половина соседа обращена к размещаемой костяшке
+                                        const neighborHalf0Vertex = neighborCell.orientation;
+                                        const neighborHalf1Vertex = (neighborCell.orientation + 3) % 6;
+                                        
+                                        let neighborValue = null;
+                                        if (neighborFacingVertex === neighborHalf0Vertex) {
+                                            neighborValue = neighborCell.values[0];
+                                        } else if (neighborFacingVertex === neighborHalf1Vertex) {
+                                            neighborValue = neighborCell.values[1];
+                                        } else {
+                                            // Используем fallback
+                                            const neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, neighborFacingDir);
+                                            neighborValue = neighborCell.values[neighborHalf];
+                                        }
+                                        
+                                        // Определяем, какая половина размещаемой костяшки обращена к соседу
+                                        let currentValue = null;
+                                        if (neighborVertexIndex === half0Vertex) {
+                                            currentValue = this.selectedPiece.values[0];
+                                        } else if (neighborVertexIndex === half1Vertex) {
+                                            currentValue = this.selectedPiece.values[1];
+                                        } else {
+                                            // Ни одна сторона не обращена точно — ориентация не подходит
+                                            allConnectionsCorrect = false;
+                                            break;
+                                        }
+                                        
+                                        if (currentValue !== neighborValue) {
+                                            allConnectionsCorrect = false;
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                // Если все соединения правильные - это правильная ориентация
+                                if (allConnectionsCorrect) {
+                                    bestOrientation = orientation;
+                                    break; // Нашли правильную ориентацию
+                                }
+                            }
+                            
+                            validOrientation = bestOrientation;
+                        }
+                        
+                        // Если нашли валидный ход с правильной ориентацией, сохраняем его
+                        if (validOrientation !== null) {
+                            this.validMoves.push({ row, col, orientation: validOrientation });
                         }
                     }
                 }
@@ -1024,6 +1188,10 @@
             }
             
             checkNeighborConnections(row, col, piece, orientation) {
+                // Проверяем, является ли размещаемая костяшка дублем (обе половинки одинаковые)
+                const isPieceDouble = piece.values[0] === piece.values[1];
+                const pieceValue = piece.values[0]; // Для дубля обе половинки одинаковые
+                
                 // Проверяем все 6 направлений
                 for (let dir = 0; dir < 6; dir++) {
                     const neighbor = this.getNeighborInDirection(row, col, dir);
@@ -1036,45 +1204,115 @@
                         continue;
                     }
                     
-                    // Определяем, какая половина текущей костяшки обращена к соседу
-                    const currentHalf = this.getHalfFacingDirection(orientation, dir);
-                    const currentValue = piece.values[currentHalf];
+                    // Проверяем, является ли сосед дублем
+                    const isNeighborDouble = neighborCell.values[0] === neighborCell.values[1];
                     
-                    // Определяем, какая половина соседа обращена к текущей клетке
-                    const neighborFacingDir = (dir + 3) % 6; // противоположное направление
-                    const neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, neighborFacingDir);
-                    const neighborValue = neighborCell.values[neighborHalf];
-                    
-                    // Если значения совпадают - это валидное соединение
-                    if (currentValue === neighborValue) {
-                        return true;
+                    if (isPieceDouble && isNeighborDouble) {
+                        // Обе костяшки - дубли: соединение возможно, если значения совпадают
+                        // Дубль может соединиться с дублем в любом направлении
+                        if (pieceValue === neighborCell.values[0]) {
+                            return true;
+                        }
+                    } else if (isPieceDouble) {
+                        // Размещаемая костяшка - дубль, сосед - обычная
+                        // Дубль может соединиться с любой половиной соседа в любом направлении, если значения совпадают
+                        const neighborFacingDir = (dir + 3) % 6; // противоположное направление
+                        const neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, neighborFacingDir);
+                        const neighborValue = neighborCell.values[neighborHalf];
+                        
+                        if (pieceValue === neighborValue) {
+                            return true;
+                        }
+                    } else if (isNeighborDouble) {
+                        // Сосед - дубль, размещаемая костяшка - обычная
+                        // Проверяем, что в данной ориентации сторона с нужным значением обращена к дублю
+                        const neighborValue = neighborCell.values[0]; // Для дубля обе половинки одинаковые
+                        
+                        // Определяем, какая половина размещаемой костяшки обращена к дублю
+                        const currentHalf = this.getHalfFacingDirection(orientation, dir);
+                        const currentValue = piece.values[currentHalf];
+                        
+                        // Сторона с нужным значением должна быть обращена к дублю
+                        if (currentValue === neighborValue) {
+                            return true;
+                        }
+                    } else {
+                        // Обе костяшки - обычные
+                        // Определяем, какая половина текущей костяшки обращена к соседу
+                        const currentHalf = this.getHalfFacingDirection(orientation, dir);
+                        const currentValue = piece.values[currentHalf];
+                        
+                        // Определяем, какая половина соседа обращена к текущей клетке
+                        const neighborFacingDir = (dir + 3) % 6; // противоположное направление
+                        const neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, neighborFacingDir);
+                        const neighborValue = neighborCell.values[neighborHalf];
+                        
+                        // Если значения совпадают - это валидное соединение
+                        if (currentValue === neighborValue) {
+                            return true;
+                        }
                     }
                 }
                 
                 return false;
             }
             
+            // Преобразует направление соседа в индекс вершины шестиугольника
+            // Направления: 0=вниз, 1=вниз-вправо, 2=вверх-вправо, 3=вверх, 4=вверх-влево, 5=вниз-влево
+            // Вершины: 0=вправо(0°), 1=вверх-вправо(60°), 2=вверх-влево(120°), 3=влево(180°), 4=вниз-влево(240°), 5=вниз-вправо(300°)
+            directionToVertexIndex(direction) {
+                // Маппинг направлений на индексы вершин
+                // Используем согласованное правило округления к ближайшей вершине по часовой стрелке
+                // Углы рёбер: [270°, 330°, 30°, 90°, 150°, 210°]
+                // Ближайшие вершины (с округлением вверх по часовой): [300°, 0°, 60°, 120°, 180°, 240°]
+                // Что соответствует индексам вершин: [5, 0, 1, 2, 3, 4]
+                const mapping = [5, 0, 1, 2, 3, 4]; // направление -> индекс вершины
+                return mapping[direction];
+            }
+            
             getHalfFacingDirection(pieceOrientation, direction) {
                 // Определяем, какая половина костяшки (0 или 1) обращена в заданном направлении
-                // Ориентация 0: половина 0 смотрит в направлении 0, половина 1 - в направлении 3
-                const half0Direction = pieceOrientation;
-                const half1Direction = (pieceOrientation + 3) % 6;
+                // Ориентация 0: половина 0 смотрит в направлении вершины 0 (0°), половина 1 - в направлении вершины 3 (180°)
                 
-                if (direction === half0Direction) return 0;
-                if (direction === half1Direction) return 1;
+                // Преобразуем направление соседа в индекс вершины
+                const vertexIndex = this.directionToVertexIndex(direction);
                 
-                // Если направление не совпадает точно с ориентацией половинок,
-                // выбираем ближайшую половину
+                // Преобразуем ориентацию половинок в индексы вершин
+                const half0Vertex = pieceOrientation; // половина 0 смотрит на вершину orientation
+                const half1Vertex = (pieceOrientation + 3) % 6; // половина 1 смотрит на вершину orientation+3
+                
+                // Проверяем точное совпадение
+                if (vertexIndex === half0Vertex) return 0;
+                if (vertexIndex === half1Vertex) return 1;
+                
+                // Если нет точного совпадения, выбираем ближайшую половину
                 const diff0 = Math.min(
-                    Math.abs(direction - half0Direction),
-                    6 - Math.abs(direction - half0Direction)
+                    Math.abs(vertexIndex - half0Vertex),
+                    6 - Math.abs(vertexIndex - half0Vertex)
                 );
                 const diff1 = Math.min(
-                    Math.abs(direction - half1Direction),
-                    6 - Math.abs(direction - half1Direction)
+                    Math.abs(vertexIndex - half1Vertex),
+                    6 - Math.abs(vertexIndex - half1Vertex)
                 );
                 
                 return diff0 < diff1 ? 0 : 1;
+            }
+            
+            // Точный расчет: возвращает индекс вершины (0..5), в направлении которой расположен сосед dir
+            // Вычисляется по вектору из центра текущей клетки к центру соседней
+            vertexIndexTowardNeighbor(row, col, dir) {
+                const neighbor = this.getNeighborInDirection(row, col, dir);
+                if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) {
+                    return null;
+                }
+                const c0 = this.getHexCenter(row, col);
+                const c1 = this.getHexCenter(neighbor.row, neighbor.col);
+                const angle = Math.atan2(c1.y - c0.y, c1.x - c0.x); // -PI..PI
+                let a = angle;
+                if (a < 0) a += Math.PI * 2; // 0..2PI
+                // Ближайшая вершина с шагом 60°
+                const idx = Math.round(a / (Math.PI / 3)) % 6;
+                return idx;
             }
             
             handleBoardClick(worldX, worldY) {
@@ -1082,8 +1320,14 @@
                 
                 const hex = this.getHexAtPosition(worldX, worldY);
                 if (hex) {
-                    if (this.canPlaceDomino(hex.row, hex.col, this.selectedPiece, this.pieceOrientation)) {
-                        this.placeDomino(hex.row, hex.col, this.selectedPiece, this.pieceOrientation);
+                    // Находим валидный ход для этой позиции с правильной ориентацией
+                    const validMove = this.validMoves.find(move => 
+                        move.row === hex.row && move.col === hex.col
+                    );
+                    
+                    if (validMove) {
+                        // Используем ориентацию из валидного хода
+                        this.placeDomino(hex.row, hex.col, this.selectedPiece, validMove.orientation);
                     }
                 }
             }
@@ -1203,18 +1447,22 @@
             }
             
             drawBoard() {
-                const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
-                const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+                const dpr = window.devicePixelRatio || 1;
+                const canvasWidth = this.canvas.width / dpr;
+                const canvasHeight = this.canvas.height / dpr;
                 
+                // Сбрасываем все трансформации и очищаем canvas
+                this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+                this.ctx.scale(dpr, dpr);
                 this.ctx.clearRect(0, 0, canvasWidth, canvasHeight);
                 
                 // Сохраняем контекст и применяем трансформации камеры
+                // Сначала смещаем, затем масштабируем
                 this.ctx.save();
                 this.ctx.translate(this.camera.x, this.camera.y);
                 this.ctx.scale(this.camera.scale, this.camera.scale);
-                this.ctx.translate(-this.camera.x, -this.camera.y);
                 
-                // Рисуем сетку
+                // Рисуем сетку (используем мировые координаты напрямую)
                 if (this.showGrid) {
                     this.drawGrid();
                 }
@@ -1237,11 +1485,11 @@
             }
             
             drawGrid() {
+                // Рисуем используя мировые координаты (трансформация уже применена через ctx.scale)
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
                         const center = this.getHexCenter(row, col);
-                        const screenPos = this.worldToScreen(center.x, center.y);
-                        this.drawEmptyHex(screenPos.x, screenPos.y, center.hexSize);
+                        this.drawEmptyHex(center.x, center.y, center.hexSize);
                     }
                 }
             }
@@ -1260,18 +1508,18 @@
                 this.ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
                 this.ctx.fill();
                 this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-                this.ctx.lineWidth = 1;
+                this.ctx.lineWidth = 1 / this.camera.scale; // Компенсируем масштаб для линии
                 this.ctx.stroke();
             }
             
             drawPlacedDominos() {
+                // Рисуем используя мировые координаты (трансформация уже применена через ctx.scale)
                 for (let row = 0; row < this.boardSize; row++) {
                     for (let col = 0; col < this.boardSize; col++) {
                         const cell = this.board[row][col];
                         if (cell !== null) {
                             const center = this.getHexCenter(row, col);
-                            const screenPos = this.worldToScreen(center.x, center.y);
-                            this.drawDominoInHex(screenPos.x, screenPos.y, center.hexSize, cell);
+                            this.drawDominoInHex(center.x, center.y, center.hexSize, cell);
                         }
                     }
                 }
@@ -1282,46 +1530,91 @@
                 const values = domino.values;
                 const player = domino.player;
                 
-                // Рисуем шестиугольник
-                this.ctx.beginPath();
+                // Базовый цвет игрока
+                const baseColor = player === 0 ? 
+                    { r: 255, g: 107, b: 107 } : { r: 78, g: 205, b: 196 };
+                
+                // Вычисляем все вершины шестиугольника
+                const vertices = [];
                 for (let i = 0; i < 6; i++) {
                     const angle = Math.PI / 3 * i;
-                    const hexX = x + hexSize * Math.cos(angle);
-                    const hexY = y + hexSize * Math.sin(angle);
-                    if (i === 0) this.ctx.moveTo(hexX, hexY);
-                    else this.ctx.lineTo(hexX, hexY);
+                    vertices.push({
+                        x: x + hexSize * Math.cos(angle),
+                        y: y + hexSize * Math.sin(angle)
+                    });
+                }
+                
+                // Определяем разделительную линию
+                // Для ориентации 0: половина 0 смотрит в направлении 0 (вершина 0)
+                // Половина 1 смотрит в направлении 3 (вершина 3)
+                // Разделительная линия проходит через центр и перпендикулярна линии 0-3
+                // Это означает, что она проходит через вершины 1 и 4
+                
+                // Первая половина включает вершины: orientation, orientation+1, orientation+2
+                // Вторая половина включает вершины: orientation+3, orientation+4, orientation+5
+                // Разделительная линия: от вершины (orientation-1) к вершине (orientation+2)
+                
+                const dividerStartIdx = (orientation - 1 + 6) % 6;
+                const dividerEndIdx = (orientation + 2 + 6) % 6;
+                
+                // Рисуем первую половину (для значения values[0])
+                // Первая половина: 3 вершины от orientation до orientation+2
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y); // Начинаем с центра
+                // Добавляем вершины первой половины (по часовой стрелке)
+                for (let i = 0; i < 3; i++) {
+                    const idx = (orientation + i) % 6;
+                    this.ctx.lineTo(vertices[idx].x, vertices[idx].y);
                 }
                 this.ctx.closePath();
-                
-                // Заливаем цветом игрока
-                const playerColor = player === 0 ? 
-                    'rgba(255, 107, 107, 0.7)' : 'rgba(78, 205, 196, 0.7)';
-                this.ctx.fillStyle = playerColor;
+                // Заливаем первую половину чуть более светлым оттенком
+                this.ctx.fillStyle = `rgba(${baseColor.r + 30}, ${baseColor.g + 30}, ${baseColor.b + 30}, 0.7)`;
                 this.ctx.fill();
+                
+                // Рисуем вторую половину (для значения values[1])
+                // Вторая половина: 3 вершины от orientation+3 до orientation+5
+                this.ctx.beginPath();
+                this.ctx.moveTo(x, y); // Начинаем с центра
+                // Добавляем вершины второй половины (по часовой стрелке)
+                for (let i = 0; i < 3; i++) {
+                    const idx = (orientation + 3 + i) % 6;
+                    this.ctx.lineTo(vertices[idx].x, vertices[idx].y);
+                }
+                this.ctx.closePath();
+                // Заливаем вторую половину чуть более темным оттенком
+                this.ctx.fillStyle = `rgba(${baseColor.r - 30}, ${baseColor.g - 30}, ${baseColor.b - 30}, 0.7)`;
+                this.ctx.fill();
+                
+                // Рисуем контур всего шестиугольника
+                this.ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    if (i === 0) this.ctx.moveTo(vertices[i].x, vertices[i].y);
+                    else this.ctx.lineTo(vertices[i].x, vertices[i].y);
+                }
+                this.ctx.closePath();
                 this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                this.ctx.lineWidth = 2;
+                this.ctx.lineWidth = 2 / this.camera.scale;
                 this.ctx.stroke();
                 
-                // Рисуем разделительную линию
-                const angle1 = Math.PI / 3 * orientation;
-                const angle2 = Math.PI / 3 * ((orientation + 3) % 6);
+                // Рисуем разделительную полосу от края до края через центр
+                const dividerStart = vertices[dividerStartIdx];
+                const dividerEnd = vertices[dividerEndIdx];
                 
                 this.ctx.beginPath();
-                this.ctx.moveTo(
-                    x + hexSize * 0.7 * Math.cos(angle1),
-                    y + hexSize * 0.7 * Math.sin(angle1)
-                );
-                this.ctx.lineTo(x, y);
-                this.ctx.lineTo(
-                    x + hexSize * 0.7 * Math.cos(angle2),
-                    y + hexSize * 0.7 * Math.sin(angle2)
-                );
-                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-                this.ctx.lineWidth = 2;
+                this.ctx.moveTo(dividerStart.x, dividerStart.y);
+                this.ctx.lineTo(dividerEnd.x, dividerEnd.y);
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 1.0)';
+                this.ctx.lineWidth = 4 / this.camera.scale; // Толстая белая линия
                 this.ctx.stroke();
                 
                 // Рисуем числа
                 if (this.showNumbers) {
+                    // Вычисляем углы для позиционирования цифр
+                    // Первое число в направлении ориентации (вершина orientation)
+                    const angle1 = Math.PI / 3 * orientation;
+                    // Второе число в противоположном направлении (вершина orientation+3)
+                    const angle2 = Math.PI / 3 * ((orientation + 3) % 6);
+                    
                     this.ctx.fillStyle = 'white';
                     const fontSize = Math.max(10, hexSize * 0.4);
                     this.ctx.font = `bold ${fontSize}px Arial`;
@@ -1341,24 +1634,101 @@
             }
             
             drawValidMoves() {
+                if (!this.selectedPiece) return;
+                
+                // Рисуем используя мировые координаты (трансформация уже применена через ctx.scale)
                 this.ctx.save();
-                this.ctx.globalAlpha = 0.3;
+                this.ctx.globalAlpha = 0.4;
+                
+                const values = this.selectedPiece.values;
                 
                 for (const move of this.validMoves) {
+                    // Используем правильную ориентацию для данного хода (если указана), иначе текущую
+                    const orientation = move.orientation !== undefined ? move.orientation : this.pieceOrientation;
                     const center = this.getHexCenter(move.row, move.col);
-                    const screenPos = this.worldToScreen(center.x, center.y);
+                    const hexSize = center.hexSize;
+                    const x = center.x;
+                    const y = center.y;
                     
-                    this.ctx.fillStyle = '#00FF00';
-                    this.ctx.beginPath();
+                    // Вычисляем все вершины шестиугольника
+                    const vertices = [];
                     for (let i = 0; i < 6; i++) {
                         const angle = Math.PI / 3 * i;
-                        const hexX = screenPos.x + center.hexSize * Math.cos(angle);
-                        const hexY = screenPos.y + center.hexSize * Math.sin(angle);
-                        if (i === 0) this.ctx.moveTo(hexX, hexY);
-                        else this.ctx.lineTo(hexX, hexY);
+                        vertices.push({
+                            x: x + hexSize * Math.cos(angle),
+                            y: y + hexSize * Math.sin(angle)
+                        });
+                    }
+                    
+                    // Определяем разделительную линию
+                    const dividerStartIdx = (orientation - 1 + 6) % 6;
+                    const dividerEndIdx = (orientation + 2 + 6) % 6;
+                    
+                    // Рисуем первую половину (светлее)
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, y);
+                    for (let i = 0; i < 3; i++) {
+                        const idx = (orientation + i) % 6;
+                        this.ctx.lineTo(vertices[idx].x, vertices[idx].y);
                     }
                     this.ctx.closePath();
+                    this.ctx.fillStyle = 'rgba(0, 255, 0, 0.3)'; // Светло-зеленый
                     this.ctx.fill();
+                    
+                    // Рисуем вторую половину (темнее)
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(x, y);
+                    for (let i = 0; i < 3; i++) {
+                        const idx = (orientation + 3 + i) % 6;
+                        this.ctx.lineTo(vertices[idx].x, vertices[idx].y);
+                    }
+                    this.ctx.closePath();
+                    this.ctx.fillStyle = 'rgba(0, 200, 0, 0.3)'; // Темно-зеленый
+                    this.ctx.fill();
+                    
+                    // Рисуем контур шестиугольника
+                    this.ctx.beginPath();
+                    for (let i = 0; i < 6; i++) {
+                        if (i === 0) this.ctx.moveTo(vertices[i].x, vertices[i].y);
+                        else this.ctx.lineTo(vertices[i].x, vertices[i].y);
+                    }
+                    this.ctx.closePath();
+                    this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
+                    this.ctx.lineWidth = 2 / this.camera.scale;
+                    this.ctx.stroke();
+                    
+                    // Рисуем разделительную полосу
+                    const dividerStart = vertices[dividerStartIdx];
+                    const dividerEnd = vertices[dividerEndIdx];
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(dividerStart.x, dividerStart.y);
+                    this.ctx.lineTo(dividerEnd.x, dividerEnd.y);
+                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                    this.ctx.lineWidth = 3 / this.camera.scale;
+                    this.ctx.stroke();
+                    
+                    // Рисуем числа
+                    if (this.showNumbers) {
+                        // Вычисляем углы для позиционирования цифр
+                        const angle1 = Math.PI / 3 * orientation;
+                        const angle2 = Math.PI / 3 * ((orientation + 3) % 6);
+                        
+                        this.ctx.fillStyle = 'rgba(0, 255, 0, 0.9)';
+                        const fontSize = Math.max(10, hexSize * 0.4);
+                        this.ctx.font = `bold ${fontSize}px Arial`;
+                        this.ctx.textAlign = 'center';
+                        this.ctx.textBaseline = 'middle';
+                        
+                        // Первое число (в направлении ориентации)
+                        const text1X = x + hexSize * 0.4 * Math.cos(angle1);
+                        const text1Y = y + hexSize * 0.4 * Math.sin(angle1);
+                        this.ctx.fillText(values[0].toString(), text1X, text1Y);
+                        
+                        // Второе число (в противоположном направлении)
+                        const text2X = x + hexSize * 0.4 * Math.cos(angle2);
+                        const text2Y = y + hexSize * 0.4 * Math.sin(angle2);
+                        this.ctx.fillText(values[1].toString(), text2X, text2Y);
+                    }
                 }
                 
                 this.ctx.restore();
@@ -1371,44 +1741,69 @@
                 
                 if (!isValid) return;
                 
+                // Рисуем используя мировые координаты (трансформация уже применена через ctx.scale)
                 const center = this.getHexCenter(this.hoveredHex.row, this.hoveredHex.col);
-                const screenPos = this.worldToScreen(center.x, center.y);
+                const orientation = this.pieceOrientation;
                 
                 this.ctx.save();
                 this.ctx.globalAlpha = 0.6;
                 
-                // Рисуем контур превью
-                this.ctx.strokeStyle = '#FFD700';
-                this.ctx.lineWidth = 3;
-                this.ctx.setLineDash([5, 5]);
-                this.ctx.beginPath();
+                // Вычисляем все вершины шестиугольника для превью
+                const vertices = [];
                 for (let i = 0; i < 6; i++) {
                     const angle = Math.PI / 3 * i;
-                    const hexX = screenPos.x + center.hexSize * Math.cos(angle);
-                    const hexY = screenPos.y + center.hexSize * Math.sin(angle);
-                    if (i === 0) this.ctx.moveTo(hexX, hexY);
-                    else this.ctx.lineTo(hexX, hexY);
+                    vertices.push({
+                        x: center.x + center.hexSize * Math.cos(angle),
+                        y: center.y + center.hexSize * Math.sin(angle)
+                    });
+                }
+                
+                // Рисуем первую половину превью (более светлый оттенок золотого)
+                this.ctx.beginPath();
+                this.ctx.moveTo(center.x, center.y);
+                for (let i = 0; i < 3; i++) {
+                    const idx = (orientation + i) % 6;
+                    this.ctx.lineTo(vertices[idx].x, vertices[idx].y);
+                }
+                this.ctx.closePath();
+                this.ctx.fillStyle = 'rgba(255, 235, 59, 0.4)'; // Светлый золотой
+                this.ctx.fill();
+                
+                // Рисуем вторую половину превью (более темный оттенок золотого)
+                this.ctx.beginPath();
+                this.ctx.moveTo(center.x, center.y);
+                for (let i = 0; i < 3; i++) {
+                    const idx = (orientation + 3 + i) % 6;
+                    this.ctx.lineTo(vertices[idx].x, vertices[idx].y);
+                }
+                this.ctx.closePath();
+                this.ctx.fillStyle = 'rgba(255, 193, 7, 0.4)'; // Темный золотой
+                this.ctx.fill();
+                
+                // Рисуем контур превью
+                this.ctx.strokeStyle = '#FFD700';
+                this.ctx.lineWidth = 3 / this.camera.scale;
+                this.ctx.setLineDash([5 / this.camera.scale, 5 / this.camera.scale]);
+                this.ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    if (i === 0) this.ctx.moveTo(vertices[i].x, vertices[i].y);
+                    else this.ctx.lineTo(vertices[i].x, vertices[i].y);
                 }
                 this.ctx.closePath();
                 this.ctx.stroke();
                 this.ctx.setLineDash([]);
                 
-                // Рисуем разделительную линию
-                const angle1 = Math.PI / 3 * this.pieceOrientation;
-                const angle2 = Math.PI / 3 * ((this.pieceOrientation + 3) % 6);
+                // Рисуем разделительную полосу от края до края
+                const dividerStartIdx = (orientation - 1 + 6) % 6;
+                const dividerEndIdx = (orientation + 2 + 6) % 6;
+                const dividerStart = vertices[dividerStartIdx];
+                const dividerEnd = vertices[dividerEndIdx];
                 
                 this.ctx.beginPath();
-                this.ctx.moveTo(
-                    screenPos.x + center.hexSize * 0.7 * Math.cos(angle1),
-                    screenPos.y + center.hexSize * 0.7 * Math.sin(angle1)
-                );
-                this.ctx.lineTo(screenPos.x, screenPos.y);
-                this.ctx.lineTo(
-                    screenPos.x + center.hexSize * 0.7 * Math.cos(angle2),
-                    screenPos.y + center.hexSize * 0.7 * Math.sin(angle2)
-                );
+                this.ctx.moveTo(dividerStart.x, dividerStart.y);
+                this.ctx.lineTo(dividerEnd.x, dividerEnd.y);
                 this.ctx.strokeStyle = '#FFD700';
-                this.ctx.lineWidth = 2;
+                this.ctx.lineWidth = 4 / this.camera.scale;
                 this.ctx.stroke();
                 
                 // Рисуем числа
@@ -1419,12 +1814,16 @@
                     this.ctx.textAlign = 'center';
                     this.ctx.textBaseline = 'middle';
                     
-                    const text1X = screenPos.x + center.hexSize * 0.4 * Math.cos(angle1);
-                    const text1Y = screenPos.y + center.hexSize * 0.4 * Math.sin(angle1);
+                    // Углы для позиционирования цифр относительно ориентации превью
+                    const angle1 = Math.PI / 3 * orientation;
+                    const angle2 = Math.PI / 3 * ((orientation + 3) % 6);
+                    
+                    const text1X = center.x + center.hexSize * 0.4 * Math.cos(angle1);
+                    const text1Y = center.y + center.hexSize * 0.4 * Math.sin(angle1);
                     this.ctx.fillText(this.selectedPiece.values[0].toString(), text1X, text1Y);
                     
-                    const text2X = screenPos.x + center.hexSize * 0.4 * Math.cos(angle2);
-                    const text2Y = screenPos.y + center.hexSize * 0.4 * Math.sin(angle2);
+                    const text2X = center.x + center.hexSize * 0.4 * Math.cos(angle2);
+                    const text2Y = center.y + center.hexSize * 0.4 * Math.sin(angle2);
                     this.ctx.fillText(this.selectedPiece.values[1].toString(), text2X, text2Y);
                 }
                 
