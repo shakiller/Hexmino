@@ -1250,8 +1250,32 @@
                                         }
                                     }
                                 } else {
+                                    // Используем vertexIndexTowardCell для точного определения
+                                    const vertexToNeighbor = this.vertexIndexTowardCell(row, col, neighbor.row, neighbor.col);
+                                    
                                     for (let orientation = 0; orientation < 6; orientation++) {
-                                        const half = this.getHalfFacingDirection(orientation, dir);
+                                        // Определяем, какая половина смотрит в сторону соседа
+                                        const half0Vertices = [
+                                            orientation,
+                                            (orientation + 1) % 6,
+                                            (orientation + 2) % 6
+                                        ];
+                                        const half1Vertices = [
+                                            (orientation + 3) % 6,
+                                            (orientation + 4) % 6,
+                                            (orientation + 5) % 6
+                                        ];
+                                        
+                                        let half;
+                                        if (half0Vertices.includes(vertexToNeighbor)) {
+                                            half = 0;
+                                        } else if (half1Vertices.includes(vertexToNeighbor)) {
+                                            half = 1;
+                                        } else {
+                                            // Запасной вариант
+                                            half = this.getHalfFacingDirection(orientation, dir);
+                                        }
+                                        
                                         if (this.selectedPiece.values[half] === neighborValue) {
                                             allowedForThisNeighbor.add(orientation);
                                         }
@@ -1288,13 +1312,57 @@
                             let centerPreferredOrientation = null;
                             let centerPreferredDir = null;
                             if (centerDir !== null && centerCell) {
-                                const centerFacingDir = (centerDir + 3) % 6;
-                                const centerHalf = this.getHalfFacingDirection(centerCell.orientation, centerFacingDir);
+                                // Используем vertexIndexTowardCell для точного определения
+                                const vertexFromCenter = this.vertexIndexTowardCell(centerRow, centerCol, row, col);
+                                
+                                // Определяем, какая половина центра смотрит на нашу клетку
+                                const centerHalf0Vertices = [
+                                    centerCell.orientation,
+                                    (centerCell.orientation + 1) % 6,
+                                    (centerCell.orientation + 2) % 6
+                                ];
+                                const centerHalf1Vertices = [
+                                    (centerCell.orientation + 3) % 6,
+                                    (centerCell.orientation + 4) % 6,
+                                    (centerCell.orientation + 5) % 6
+                                ];
+                                
+                                let centerHalf;
+                                if (centerHalf0Vertices.includes(vertexFromCenter)) {
+                                    centerHalf = 0;
+                                } else if (centerHalf1Vertices.includes(vertexFromCenter)) {
+                                    centerHalf = 1;
+                                } else {
+                                    const centerFacingDir = (centerDir + 3) % 6;
+                                    centerHalf = this.getHalfFacingDirection(centerCell.orientation, centerFacingDir);
+                                }
                                 const centerValue = centerCell.values[centerHalf];
                                 
-                                // Для превью ищем ориентацию, совпадающую с центром (без проверки других соседей)
+                                // Теперь ищем ориентацию выбранной костяшки
+                                const vertexToCenter = this.vertexIndexTowardCell(row, col, centerRow, centerCol);
+                                
                                 for (let orientation = 0; orientation < 6; orientation++) {
-                                    const currentHalf = this.getHalfFacingDirection(orientation, centerDir);
+                                    // Определяем, какая половина выбранной костяшки смотрит на центр
+                                    const half0Vertices = [
+                                        orientation,
+                                        (orientation + 1) % 6,
+                                        (orientation + 2) % 6
+                                    ];
+                                    const half1Vertices = [
+                                        (orientation + 3) % 6,
+                                        (orientation + 4) % 6,
+                                        (orientation + 5) % 6
+                                    ];
+                                    
+                                    let currentHalf;
+                                    if (half0Vertices.includes(vertexToCenter)) {
+                                        currentHalf = 0;
+                                    } else if (half1Vertices.includes(vertexToCenter)) {
+                                        currentHalf = 1;
+                                    } else {
+                                        currentHalf = this.getHalfFacingDirection(orientation, centerDir);
+                                    }
+                                    
                                     const currentValue = this.selectedPiece.values[currentHalf];
                                     if (currentValue === centerValue) {
                                         centerPreferredOrientation = orientation;
@@ -1486,11 +1554,32 @@
                         if (validOrientation !== null) {
                             const orientation = typeof validOrientation === 'object' ? validOrientation.o : validOrientation;
                             const matchDir = typeof validOrientation === 'object' ? validOrientation.dir : null;
+                            
+                            // Отладка: проверяем, какие половины показываются к соседям
+                            if (this.debug) {
+                                console.log(`[ValidMove] row=${row} col=${col} orientation=${orientation} piece=${this.selectedPiece.values.join(':')}`);
+                                for (let dir = 0; dir < 6; dir++) {
+                                    const neighbor = this.getNeighborInDirection(row, col, dir);
+                                    if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) continue;
+                                    const neighborCell = this.board[neighbor.row][neighbor.col];
+                                    if (!neighborCell) continue;
+                                    
+                                    const vertexToNeighbor = this.vertexIndexTowardCell(row, col, neighbor.row, neighbor.col);
+                                    const half0Vertices = [orientation, (orientation + 1) % 6, (orientation + 2) % 6];
+                                    const half1Vertices = [(orientation + 3) % 6, (orientation + 4) % 6, (orientation + 5) % 6];
+                                    let half;
+                                    if (half0Vertices.includes(vertexToNeighbor)) {
+                                        half = 0;
+                                    } else if (half1Vertices.includes(vertexToNeighbor)) {
+                                        half = 1;
+                                    } else {
+                                        half = '?';
+                                    }
+                                    console.log(`  dir=${dir} -> neighbor [${neighbor.row},${neighbor.col}] vertex=${vertexToNeighbor} half=${half} value=${this.selectedPiece.values[half] ?? '?'}`);
+                                }
+                            }
+                            
                             this.validMoves.push({ row, col, orientation, matchDir });
-                            // Убираем лишнее логирование
-                            // if (this.debug) {
-                            //     console.log('[validMove]', { row, col, orientation, matchDir, piece: this.selectedPiece?.values });
-                            // }
                         }
                     }
                 }
@@ -2038,10 +2127,7 @@
                             }
                             const neighborValue = neighborCell.values[neighborHalf];
                             
-                            console.log(`Checking [${row},${col}] dir=${dir} vertex=${vertexToNeighbor} (half=${currentHalf}, val=${currentValue}) -> neighbor [${neighbor.row},${neighbor.col}] vertex=${vertexFromNeighbor} (half=${neighborHalf}, val=${neighborValue})`);
-                            
                             if (currentValue === neighborValue) {
-                                console.log(`  ✓ MATCH! Adding to connections`);
                                 // Сохраняем оба соединения (с обеих сторон) - используем half вместо dir
                                 this.matchingConnections.add(`${row},${col},${currentHalf}`);
                                 this.matchingConnections.add(`${neighbor.row},${neighbor.col},${neighborHalf}`);
@@ -2636,24 +2722,30 @@
                     
                     // Рисуем числа
                     if (this.showNumbers) {
-                        // Центроиды половин (центр тяжести многоугольников половин)
-                        const polygonCentroid = (vertices) => {
-                            let cx = 0, cy = 0;
-                            for (const v of vertices) {
-                                cx += v.x;
-                                cy += v.y;
+                        // Используем ту же логику центроида, что и в drawDominoInHex
+                        const polygonCentroid = (pts) => {
+                            let a = 0, cx = 0, cy = 0;
+                            for (let i = 0; i < pts.length; i++) {
+                                const p = pts[i];
+                                const q = pts[(i + 1) % pts.length];
+                                const cross = p.x * q.y - q.x * p.y;
+                                a += cross;
+                                cx += (p.x + q.x) * cross;
+                                cy += (p.y + q.y) * cross;
                             }
-                            return { x: cx / vertices.length, y: cy / vertices.length };
+                            a = a / 2;
+                            if (Math.abs(a) < 1e-6) return { x, y };
+                            return { x: cx / (6 * a), y: cy / (6 * a) };
                         };
                         
-                        // Половина 1 (values[0]) - вершины orientation, orientation+1, orientation+2
+                        // Половина 1 (values[0]) - образует четырехугольник: центр + три последовательные вершины
                         const half1Poly = [
                             { x, y },
-                            vertices[(renderOrientation + 0) % 6],
+                            vertices[renderOrientation % 6],
                             vertices[(renderOrientation + 1) % 6],
                             vertices[(renderOrientation + 2) % 6]
                         ];
-                        // Половина 2 (values[1]) - вершины orientation+3, orientation+4, orientation+5
+                        // Половина 2 (values[1]) — центр + три вершины противоположной стороны
                         const half2Poly = [
                             { x, y },
                             vertices[(renderOrientation + 3) % 6],
@@ -2670,7 +2762,7 @@
                         this.ctx.textAlign = 'center';
                         this.ctx.textBaseline = 'middle';
                         
-                        // Отображаем values[0] в половине 1, values[1] в половине 2 (как в drawDominoInHex)
+                        // Отображаем values[0] в половине 1, values[1] в половине 2
                         this.ctx.fillText(values[0].toString(), c1.x, c1.y);
                         this.ctx.fillText(values[1].toString(), c2.x, c2.y);
                     }
