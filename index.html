@@ -1337,18 +1337,87 @@
                         }
                     } else {
                         // Обе костяшки - обычные
-                        // Определяем, какая половина текущей костяшки обращена к соседу
-                        const currentHalf = this.getHalfFacingDirection(orientation, dir);
-                        const currentValue = piece.values[currentHalf];
+                        // ПРАВИЛЬНО: используем ту же логику, что и в логировании - вычисляем индекс вершины по координатам
+                        const vertexIndex = this.vertexIndexTowardCell(row, col, neighbor.row, neighbor.col);
                         
-                        // Определяем, какая половина соседа обращена к текущей клетке
-                        const neighborFacingDir = (dir + 3) % 6; // противоположное направление
-                        const neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, neighborFacingDir);
-                        const neighborValue = neighborCell.values[neighborHalf];
-                        
-                        // Если значения совпадают - это валидное соединение
-                        if (currentValue === neighborValue) {
-                            return true;
+                        if (vertexIndex !== null) {
+                            // Определяем, какая половина текущей костяшки обращена к соседу
+                            const half0Vertices = [
+                                orientation,
+                                (orientation + 1) % 6,
+                                (orientation + 2) % 6
+                            ];
+                            const half1Vertices = [
+                                (orientation + 3) % 6,
+                                (orientation + 4) % 6,
+                                (orientation + 5) % 6
+                            ];
+                            
+                            let currentHalf;
+                            if (half0Vertices.includes(vertexIndex)) {
+                                currentHalf = 0;
+                            } else if (half1Vertices.includes(vertexIndex)) {
+                                currentHalf = 1;
+                            } else {
+                                // Запасной вариант
+                                currentHalf = this.getHalfFacingDirection(orientation, dir);
+                            }
+                            const currentValue = piece.values[currentHalf];
+                            
+                            // Определяем, какая половина соседа обращена к текущей клетке
+                            const neighborVertexIndex = this.vertexIndexTowardCell(neighbor.row, neighbor.col, row, col);
+                            
+                            if (neighborVertexIndex !== null) {
+                                const neighborHalf0Vertices = [
+                                    neighborCell.orientation,
+                                    (neighborCell.orientation + 1) % 6,
+                                    (neighborCell.orientation + 2) % 6
+                                ];
+                                const neighborHalf1Vertices = [
+                                    (neighborCell.orientation + 3) % 6,
+                                    (neighborCell.orientation + 4) % 6,
+                                    (neighborCell.orientation + 5) % 6
+                                ];
+                                
+                                let neighborHalf;
+                                if (neighborHalf0Vertices.includes(neighborVertexIndex)) {
+                                    neighborHalf = 0;
+                                } else if (neighborHalf1Vertices.includes(neighborVertexIndex)) {
+                                    neighborHalf = 1;
+                                } else {
+                                    // Запасной вариант
+                                    const neighborFacingDir = (dir + 3) % 6;
+                                    neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, neighborFacingDir);
+                                }
+                                const neighborValue = neighborCell.values[neighborHalf];
+                                
+                                // Если значения совпадают - это валидное соединение
+                                if (currentValue === neighborValue) {
+                                    return true;
+                                }
+                            } else {
+                                // Запасной вариант, если не удалось вычислить индекс вершины
+                                const currentHalf = this.getHalfFacingDirection(orientation, dir);
+                                const currentValue = piece.values[currentHalf];
+                                const neighborFacingDir = (dir + 3) % 6;
+                                const neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, neighborFacingDir);
+                                const neighborValue = neighborCell.values[neighborHalf];
+                                
+                                if (currentValue === neighborValue) {
+                                    return true;
+                                }
+                            }
+                        } else {
+                            // Запасной вариант, если не удалось вычислить индекс вершины
+                            const currentHalf = this.getHalfFacingDirection(orientation, dir);
+                            const currentValue = piece.values[currentHalf];
+                            const neighborFacingDir = (dir + 3) % 6;
+                            const neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, neighborFacingDir);
+                            const neighborValue = neighborCell.values[neighborHalf];
+                            
+                            if (currentValue === neighborValue) {
+                                return true;
+                            }
                         }
                     }
                 }
@@ -1975,8 +2044,9 @@
                                 // Берем значение из этой половины - это то значение, которое визуально видно
                                 neighborValue = this.selectedPiece.values[neighborHalf];
                                 
-                                // Поворот нужен, если ориентация не 0
-                                needsRotation = (previewOrientation !== 0);
+                                // Поворот нужен только если значение не совпадает с центром
+                                // Если значение совпадает, то ориентация правильная (или не важна для дублей)
+                                needsRotation = (neighborValue !== centerValue);
                             }
                         }
                     }
