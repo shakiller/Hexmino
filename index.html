@@ -1177,7 +1177,7 @@
                 if (!this.selectedPiece || this.validMoves.length === 0) return;
                 
                 // Переключаем индекс варианта
-                this.selectedVariantIndex = (this.selectedVariantIndex + 1) % 3;
+                this.selectedVariantIndex = (this.selectedVariantIndex + 1) % 6;
                 
                 // Пересчитываем validMoves с новым индексом
                 this.calculateValidMoves();
@@ -1286,44 +1286,81 @@
                 return null;
             }
         
-        getDirectionToNeighbor(row, col, targetRow, targetCol) {
+            getHalfIndexTowardCell(row, col, orientation, targetRow, targetCol) {
+                const half0Vertices = [
+                    orientation,
+                    (orientation + 1) % 6,
+                    (orientation + 2) % 6
+                ];
+                const half1Vertices = [
+                    (orientation + 3) % 6,
+                    (orientation + 4) % 6,
+                    (orientation + 5) % 6
+                ];
+                
+                const vertex = this.vertexIndexTowardCell(row, col, targetRow, targetCol);
+                if (vertex !== null) {
+                    if (half0Vertices.includes(vertex)) return 0;
+                    if (half1Vertices.includes(vertex)) return 1;
+                }
+                
+                return null;
+            }
+        
+            getCellValueFacing(cell, cellRow, cellCol, targetRow, targetCol, fallbackDir) {
+                if (cell.values[0] === cell.values[1]) {
+                    return cell.values[0];
+                }
+                
+                const vertexFromCell = this.vertexIndexTowardCell(cellRow, cellCol, targetRow, targetCol);
+                if (vertexFromCell !== null) {
+                    const half0Vertices = [
+                        cell.orientation,
+                        (cell.orientation + 1) % 6,
+                        (cell.orientation + 2) % 6
+                    ];
+                    const half1Vertices = [
+                        (cell.orientation + 3) % 6,
+                        (cell.orientation + 4) % 6,
+                        (cell.orientation + 5) % 6
+                    ];
+                    
+                    if (half0Vertices.includes(vertexFromCell)) {
+                        return cell.values[0];
+                    }
+                    if (half1Vertices.includes(vertexFromCell)) {
+                        return cell.values[1];
+                    }
+                }
+                
+                const half = this.getHalfFacingDirection(cell.orientation, fallbackDir);
+                return cell.values[half];
+            }
+        
+        findMatchedDirection(row, col, piece, orientation) {
             for (let dir = 0; dir < 6; dir++) {
                 const neighbor = this.getNeighborInDirection(row, col, dir);
-                if (neighbor && neighbor.row === targetRow && neighbor.col === targetCol) {
+                if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) continue;
+                const neighborCell = this.board[neighbor.row][neighbor.col];
+                if (!neighborCell) continue;
+                
+                const pieceHalf = this.getHalfIndexTowardCell(row, col, orientation, neighbor.row, neighbor.col);
+                if (pieceHalf === null) continue;
+                
+                const pieceValue = piece.values[pieceHalf];
+                const neighborValue = this.getCellValueFacing(
+                    neighborCell,
+                    neighbor.row,
+                    neighbor.col,
+                    row,
+                    col,
+                    (dir + 3) % 6
+                );
+                
+                if (pieceValue === neighborValue) {
                     return dir;
                 }
             }
-            return null;
-        }
-        
-        getHalfIndexTowardCell(row, col, orientation, targetRow, targetCol) {
-            const half0Vertices = [
-                orientation,
-                (orientation + 1) % 6,
-                (orientation + 2) % 6
-            ];
-            const half1Vertices = [
-                (orientation + 3) % 6,
-                (orientation + 4) % 6,
-                (orientation + 5) % 6
-            ];
-            
-            const vertex = this.vertexIndexTowardCell(row, col, targetRow, targetCol);
-            if (vertex !== null) {
-                if (half0Vertices.includes(vertex)) return 0;
-                if (half1Vertices.includes(vertex)) return 1;
-            }
-            
-            const dir = this.getDirectionToNeighbor(row, col, targetRow, targetCol);
-            if (dir !== null) {
-                const vertexFromDir = this.directionToVertexIndex(dir);
-                if (half0Vertices.includes(vertexFromDir)) return 0;
-                if (half1Vertices.includes(vertexFromDir)) return 1;
-                
-                // В крайнем случае используем старый подход через getHalfFacingDirection
-                return this.getHalfFacingDirection(orientation, dir);
-            }
-            
             return null;
         }
             
@@ -1341,6 +1378,8 @@
                 let centerCol = null;
                 let centerCell = null;
                 
+                const isFirstMove = this.usedPieces.length === 0;
+                
                 if (this.usedPieces.length > 0) {
                     // Центральная костяшка — это первая размещённая (первый элемент в usedPieces)
                     const firstPlaced = this.usedPieces[0];
@@ -1356,11 +1395,13 @@
                     for (let col = 0; col < this.boardSize; col++) {
                         // Проверяем все возможные ориентации, чтобы найти правильную
                         let validOrientation = null;
+                        let orientationOptions = null;
                         
                         // Проверяем все ориентации и находим правильную
                         // Для первого хода берем ориентацию 0
-                        if (this.usedPieces.length === 0) {
-                            validOrientation = 0;
+                        if (isFirstMove) {
+                            orientationOptions = [0];
+                            validOrientation = orientationOptions[this.selectedVariantIndex % orientationOptions.length];
                         } else {
                             // Для последующих ходов подбираем ориентацию пересечением ограничений
                             let bestOrientation = null;
@@ -1394,6 +1435,10 @@
                             const debugNeighbors = [];
                             const isSelectedDouble = this.selectedPiece.values[0] === this.selectedPiece.values[1];
                             const selectedValue = this.selectedPiece.values[0];
+                            const filterOrientationOptions = (options) => {
+                                if (!options || options.length === 0) return [];
+                                return [...new Set(options)];
+                            };
                             
                                     for (let dir = 0; dir < 6; dir++) {
                                         const neighbor = this.getNeighborInDirection(row, col, dir);
@@ -1617,8 +1662,13 @@
                                         continue;
                                     }
                                     
+                            orientationOptions = validCenterOrientations;
+                                    if (orientationOptions.length === 0) {
+                                        continue;
+                                    }
+                                    
                                     // Выбираем ориентацию по индексу варианта (циклически)
-                                    const selectedOrientation = validCenterOrientations[this.selectedVariantIndex % validCenterOrientations.length];
+                                    const selectedOrientation = orientationOptions[this.selectedVariantIndex % orientationOptions.length];
                                     
                                     if (this.debug) {
                                         console.log(`[Orient] cell [${row},${col}] valid=${validCenterOrientations.join(',')} variant=${this.selectedVariantIndex} selected=${selectedOrientation} piece=${this.formatPieceValues(this.selectedPiece.values)}`);
@@ -1717,8 +1767,22 @@
                                     return (a.matchedDir ?? 0) - (b.matchedDir ?? 0);
                                 });
                                 if (candidates.length > 0) {
-                                    bestOrientation = candidates[0].orientation;
-                                    bestMatchedDir = candidates[0].matchedDir;
+                                    orientationOptions = candidates.map(c => c.orientation);
+                                    if (orientationOptions.length === 0) {
+                                        continue;
+                                    }
+                                    const variantIdx = this.selectedVariantIndex % orientationOptions.length;
+                                    const selectedOrientation = orientationOptions[variantIdx];
+                                    const matchedCandidate = candidates.find(c => c.orientation === selectedOrientation);
+                                    bestOrientation = selectedOrientation;
+                                    bestMatchedDir = matchedCandidate ? matchedCandidate.matchedDir : null;
+                                } else {
+                                    const allowedArrUnique = [...new Set(allowedArr)];
+                                    orientationOptions = allowedArrUnique;
+                                    if (orientationOptions.length === 0) {
+                                        continue;
+                                    }
+                                    bestOrientation = orientationOptions[this.selectedVariantIndex % orientationOptions.length];
                                 }
                             }
                             
@@ -1803,18 +1867,39 @@
                         // Если нашли валидный ход с правильной ориентацией, сохраняем его
                         if (validOrientation !== null) {
                             let orientation = typeof validOrientation === 'object' ? validOrientation.o : validOrientation;
-                            const matchDir = typeof validOrientation === 'object' ? validOrientation.dir : null;
+                            if (!orientationOptions || orientationOptions.length === 0) {
+                                orientationOptions = [orientation];
+                            }
                             
                             // Финальная проверка: ориентация должна реально подходить ко всем соседям.
                             // Если вдруг вычисленная ориентация даёт неправильное сопряжение,
                             // перебираем все 6 ориентаций и выбираем первую действительно валидную.
-                            if (!this.matchesAllNeighbors(row, col, this.selectedPiece, orientation)) {
-                                for (let alt = 0; alt < 6; alt++) {
-                                    if (this.matchesAllNeighbors(row, col, this.selectedPiece, alt)) {
-                                        orientation = alt;
-                                        break;
+                            if (!isFirstMove) {
+                                const validByNeighbors = orientationOptions.filter(o =>
+                                    this.matchesAllNeighbors(row, col, this.selectedPiece, o)
+                                );
+                                if (validByNeighbors.length === 0) {
+                                    let fallbackFound = false;
+                                    for (let alt = 0; alt < 6; alt++) {
+                                        if (this.matchesAllNeighbors(row, col, this.selectedPiece, alt)) {
+                                            orientation = alt;
+                                            fallbackFound = true;
+                                            break;
+                                        }
                                     }
+                                    if (!fallbackFound) {
+                                        continue;
+                                    }
+                                    orientationOptions = [orientation];
+                                } else {
+                                    orientationOptions = validByNeighbors;
+                                    orientation = orientationOptions[this.selectedVariantIndex % orientationOptions.length];
                                 }
+                            }
+                            
+                            let matchDir = typeof validOrientation === 'object' ? validOrientation.dir : null;
+                            if (matchDir === null || (orientationOptions && !orientationOptions.includes(orientation))) {
+                                matchDir = this.findMatchedDirection(row, col, this.selectedPiece, orientation);
                             }
                             
                             // Отладка: проверяем, какие половины показываются к соседям
@@ -1914,7 +1999,7 @@
                             };
 
                             const activeHalf = determineActiveHalf();
-                            this.validMoves.push({ row, col, orientation, matchDir, activeHalf });
+                            this.validMoves.push({ row, col, orientation, orientations: orientationOptions, matchDir, activeHalf });
                         }
                     }
                 }
@@ -2960,7 +3045,10 @@
                     return lines.join('');
                 }
                 
-                lines.push(`<div class="manual-log-line">[Move] orientation=${move.orientation}, activeHalf=${move.activeHalf ?? '—'}, matchDir=${move.matchDir ?? '—'}</div>`);
+                const orientationsText = move.orientations && move.orientations.length
+                    ? move.orientations.join(', ')
+                    : '—';
+                lines.push(`<div class="manual-log-line">[Move] orientation=${move.orientation}, orientations=[${orientationsText}], activeHalf=${move.activeHalf ?? '—'}, matchDir=${move.matchDir ?? '—'}</div>`);
                 
                 for (let dir = 0; dir < 6; dir++) {
                     const neighbor = this.getNeighborInDirection(row, col, dir);
@@ -2995,36 +3083,6 @@
                 console.groupEnd();
                 
                 return lines.join('');
-            }
-            
-            getCellValueFacing(cell, cellRow, cellCol, targetRow, targetCol, fallbackDir) {
-                if (cell.values[0] === cell.values[1]) {
-                    return cell.values[0];
-                }
-                
-                const vertexFromCell = this.vertexIndexTowardCell(cellRow, cellCol, targetRow, targetCol);
-                if (vertexFromCell !== null) {
-                    const half0Vertices = [
-                        cell.orientation,
-                        (cell.orientation + 1) % 6,
-                        (cell.orientation + 2) % 6
-                    ];
-                    const half1Vertices = [
-                        (cell.orientation + 3) % 6,
-                        (cell.orientation + 4) % 6,
-                        (cell.orientation + 5) % 6
-                    ];
-                    
-                    if (half0Vertices.includes(vertexFromCell)) {
-                        return cell.values[0];
-                    }
-                    if (half1Vertices.includes(vertexFromCell)) {
-                        return cell.values[1];
-                    }
-                }
-                
-                const half = this.getHalfFacingDirection(cell.orientation, fallbackDir);
-                return cell.values[half];
             }
             
             drawValidMoves() {
@@ -3254,15 +3312,13 @@
             }
             
             drawPlacementPreview() {
-                const isValid = this.validMoves.some(move => 
-                    move.row === this.hoveredHex.row && move.col === this.hoveredHex.col
+                const move = this.validMoves.find(m => 
+                    m.row === this.hoveredHex.row && m.col === this.hoveredHex.col
                 );
-                
-                if (!isValid) return;
                 
                 // Рисуем используя мировые координаты (трансформация уже применена через ctx.scale)
                 const center = this.getHexCenter(this.hoveredHex.row, this.hoveredHex.col);
-                const orientation = this.pieceOrientation;
+                const orientation = move ? move.orientation : this.pieceOrientation;
                 
                 this.ctx.save();
                 this.ctx.globalAlpha = 0.6;
@@ -3281,6 +3337,43 @@
                 const dividerStartIdx = (orientation - 1 + 6) % 6;
                 const dividerEndIdx = (orientation + 2 + 6) % 6;
                 
+                const isActiveMove = Boolean(move);
+                const previewActiveHalf = move && typeof move.activeHalf === 'number' ? move.activeHalf : null;
+                const half0Alpha = previewActiveHalf === null ? 0.65 : (previewActiveHalf === 0 ? 0.9 : 0.2);
+                const half1Alpha = previewActiveHalf === null ? 0.65 : (previewActiveHalf === 1 ? 0.9 : 0.2);
+                
+                const polygonCentroid = (pts) => {
+                    let a = 0, cx = 0, cy = 0;
+                    for (let i = 0; i < pts.length; i++) {
+                        const p = pts[i];
+                        const q = pts[(i + 1) % pts.length];
+                        const cross = p.x * q.y - q.x * p.y;
+                        a += cross;
+                        cx += (p.x + q.x) * cross;
+                        cy += (p.y + q.y) * cross;
+                    }
+                    a = a / 2;
+                    if (Math.abs(a) < 1e-6) return { x: pts[0].x, y: pts[0].y };
+                    return { x: cx / (6 * a), y: cy / (6 * a) };
+                };
+                
+                const buildHalfPolygon = (halfIndex, orientationBase, centerPoint, verticesArr) => {
+                    if (halfIndex === 0) {
+                        return [
+                            { x: centerPoint.x, y: centerPoint.y },
+                            verticesArr[orientationBase % 6],
+                            verticesArr[(orientationBase + 1) % 6],
+                            verticesArr[(orientationBase + 2) % 6]
+                        ];
+                    }
+                    return [
+                        { x: centerPoint.x, y: centerPoint.y },
+                        verticesArr[(orientationBase + 3) % 6],
+                        verticesArr[(orientationBase + 4) % 6],
+                        verticesArr[(orientationBase + 5) % 6]
+                    ];
+                };
+                
                 // Первая половина превью
                 this.ctx.beginPath();
                 this.ctx.moveTo(vertices[dividerStartIdx].x, vertices[dividerStartIdx].y);
@@ -3290,7 +3383,7 @@
                 }
                 this.ctx.lineTo(vertices[dividerEndIdx].x, vertices[dividerEndIdx].y);
                 this.ctx.closePath();
-                this.ctx.fillStyle = this.getValueColor(values[0], 0.65);
+                this.ctx.fillStyle = this.getValueColor(values[0], half0Alpha);
                 this.ctx.fill();
                 
                 // Вторая половина превью
@@ -3302,7 +3395,7 @@
                 }
                 this.ctx.lineTo(vertices[dividerStartIdx].x, vertices[dividerStartIdx].y);
                 this.ctx.closePath();
-                this.ctx.fillStyle = this.getValueColor(values[1], 0.65);
+                this.ctx.fillStyle = this.getValueColor(values[1], half1Alpha);
                 this.ctx.fill();
                 
                 // Рисуем контур превью
@@ -3328,6 +3421,24 @@
                 this.ctx.strokeStyle = '#FFD700';
                 this.ctx.lineWidth = 4 / this.camera.scale;
                 this.ctx.stroke();
+                
+                if (isActiveMove && previewActiveHalf !== null) {
+                    const polygon = buildHalfPolygon(
+                        previewActiveHalf,
+                        orientation,
+                        { x: center.x, y: center.y },
+                        vertices
+                    );
+                    const centroid = polygonCentroid(polygon);
+                    const markerRadius = Math.max(3.5, center.hexSize * 0.12);
+                    this.ctx.beginPath();
+                    this.ctx.arc(centroid.x, centroid.y, markerRadius, 0, Math.PI * 2);
+                    this.ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                    this.ctx.fill();
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.75)';
+                    this.ctx.lineWidth = 1.2 / this.camera.scale;
+                    this.ctx.stroke();
+                }
                 
                 this.ctx.restore();
             }
