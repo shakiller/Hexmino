@@ -1360,9 +1360,9 @@
                 if (pieceValue === neighborValue) {
                     return dir;
                 }
+                }
+                return null;
             }
-            return null;
-        }
             
             isValidPosition(row, col) {
                 return row >= 0 && row < this.boardSize && col >= 0 && col < this.boardSize;
@@ -1897,38 +1897,17 @@
                                 }
                             }
                             
+                            // ВАЖНО: определяем matchDir ПОСЛЕ финализации orientation
                             let matchDir = typeof validOrientation === 'object' ? validOrientation.dir : null;
                             if (matchDir === null || (orientationOptions && !orientationOptions.includes(orientation))) {
+                                // Переопределяем matchDir на основе финального orientation
                                 matchDir = this.findMatchedDirection(row, col, this.selectedPiece, orientation);
                             }
                             
-                            // Отладка: проверяем, какие половины показываются к соседям
-                            if (this.debug) {
-                                console.log(`[ValidMove] row=${row} col=${col} orientation=${orientation} piece=${this.formatPieceValues(this.selectedPiece.values)}`);
-                                for (let dir = 0; dir < 6; dir++) {
-                                    const neighbor = this.getNeighborInDirection(row, col, dir);
-                                    if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) continue;
-                                    const neighborCell = this.board[neighbor.row][neighbor.col];
-                                    if (!neighborCell) continue;
-                                    
-                                    const vertexToNeighbor = this.vertexIndexTowardCell(row, col, neighbor.row, neighbor.col);
-                                    const half0Vertices = [orientation, (orientation + 1) % 6, (orientation + 2) % 6];
-                                    const half1Vertices = [(orientation + 3) % 6, (orientation + 4) % 6, (orientation + 5) % 6];
-                                    let half;
-                                    if (half0Vertices.includes(vertexToNeighbor)) {
-                                        half = 0;
-                                    } else if (half1Vertices.includes(vertexToNeighbor)) {
-                                        half = 1;
-                                    } else {
-                                        half = '?';
-                                    }
-                                    const halfValue = this.selectedPiece.values[half];
-                                    const label = halfValue !== undefined ? this.getValueLabel(halfValue) : '?';
-                                    console.log(`  dir=${dir} -> neighbor [${neighbor.row},${neighbor.col}] vertex=${vertexToNeighbor} half=${half} value=${label}`);
-                                }
-                            }
-                            
+                            // ВАЖНО: определяем activeHalf ПОСЛЕ определения matchDir и финализации orientation
+                            // Используем финальный orientation и matchDir
                             const determineActiveHalf = () => {
+                                // Приоритет 1: используем matchDir, если он определён
                                 if (matchDir !== null) {
                                     const neighbor = this.getNeighborInDirection(row, col, matchDir);
                                     if (neighbor && this.isValidPosition(neighbor.row, neighbor.col)) {
@@ -1939,6 +1918,7 @@
                                     }
                                 }
                                 
+                                // Приоритет 2: используем направление к центру
                                 if (centerRow !== null && centerCol !== null) {
                                     const dirToCenter = this.getDirectionToNeighbor(row, col, centerRow, centerCol);
                                     if (dirToCenter !== null) {
@@ -1949,6 +1929,7 @@
                                     }
                                 }
                                 
+                                // Приоритет 3: ищем любой совпадающий сосед
                                 for (let dir = 0; dir < 6; dir++) {
                                     const neighbor = this.getNeighborInDirection(row, col, dir);
                                     if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) continue;
@@ -1999,7 +1980,80 @@
                             };
 
                             const activeHalf = determineActiveHalf();
-                            this.validMoves.push({ row, col, orientation, orientations: orientationOptions, matchDir, activeHalf });
+                            
+                            // Отладка: проверяем, какие половины показываются к соседям
+                            if (this.debug) {
+                                console.log(`[ValidMove] row=${row} col=${col} orientation=${orientation} piece=${this.formatPieceValues(this.selectedPiece.values)} matchDir=${matchDir} activeHalf=${activeHalf}`);
+                                for (let dir = 0; dir < 6; dir++) {
+                                    const neighbor = this.getNeighborInDirection(row, col, dir);
+                                    if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) continue;
+                                    const neighborCell = this.board[neighbor.row][neighbor.col];
+                                    if (!neighborCell) continue;
+                                    
+                                    const vertexToNeighbor = this.vertexIndexTowardCell(row, col, neighbor.row, neighbor.col);
+                                    const half0Vertices = [orientation, (orientation + 1) % 6, (orientation + 2) % 6];
+                                    const half1Vertices = [(orientation + 3) % 6, (orientation + 4) % 6, (orientation + 5) % 6];
+                                    let half;
+                                    if (half0Vertices.includes(vertexToNeighbor)) {
+                                        half = 0;
+                                    } else if (half1Vertices.includes(vertexToNeighbor)) {
+                                        half = 1;
+                                    } else {
+                                        half = '?';
+                                    }
+                                    const halfValue = this.selectedPiece.values[half];
+                                    const label = halfValue !== undefined ? this.getValueLabel(halfValue) : '?';
+                                    console.log(`  dir=${dir} -> neighbor [${neighbor.row},${neighbor.col}] vertex=${vertexToNeighbor} half=${half} value=${label}`);
+                                }
+                            }
+                            // КРИТИЧЕСКАЯ ПРОВЕРКА: убеждаемся, что activeHalf действительно соответствует matchDir
+                            let finalActiveHalf = activeHalf;
+                            if (matchDir !== null && activeHalf !== null) {
+                                const neighbor = this.getNeighborInDirection(row, col, matchDir);
+                                if (neighbor && this.isValidPosition(neighbor.row, neighbor.col)) {
+                                    const verifiedHalf = this.getHalfIndexTowardCell(row, col, orientation, neighbor.row, neighbor.col);
+                                    if (verifiedHalf !== null && verifiedHalf !== activeHalf) {
+                                        console.warn(`[calculateValidMoves] РАССИНХРОНИЗАЦИЯ для клетки (${row},${col}): activeHalf=${activeHalf}, но verifiedHalf=${verifiedHalf} для matchDir=${matchDir}, orientation=${orientation}`);
+                                        // Исправляем activeHalf на правильный
+                                        finalActiveHalf = verifiedHalf;
+                                    }
+                                }
+                            }
+                            
+                            // Создаём копию массива и делаем его иммутабельным
+                            const savedValues = Object.freeze([...this.selectedPiece.values]);
+                            
+                            // Проверка: убеждаемся, что values действительно сохраняются
+                            if (!savedValues || savedValues.length !== 2) {
+                                console.error(`[calculateValidMoves] Invalid values for cell (${row},${col}):`, savedValues, 'selectedPiece:', this.selectedPiece);
+                                continue;
+                            }
+                            
+                            const moveObj = {
+                                row,
+                                col,
+                                orientation,
+                                orientations: orientationOptions,
+                                matchDir,
+                                activeHalf: finalActiveHalf,
+                                values: savedValues
+                            };
+                            
+                            // Проверка: убеждаемся, что values действительно сохраняются правильно
+                            if (!savedValues || savedValues.length !== 2 || typeof savedValues[0] !== 'number' || typeof savedValues[1] !== 'number') {
+                                console.error(`[calculateValidMoves] НЕВЕРНЫЕ values при сохранении для клетки (${row},${col}):`, savedValues, 'selectedPiece:', this.selectedPiece);
+                                continue;
+                            }
+                            
+                            // Проверка: убеждаемся, что для этой клетки ещё нет move (не должно быть дубликатов)
+                            const existingMoveIndex = this.validMoves.findIndex(m => m.row === row && m.col === col);
+                            if (existingMoveIndex !== -1) {
+                                // Если для клетки уже есть move, заменяем его на новый (более актуальный)
+                                console.warn(`[calculateValidMoves] ДУБЛИКАТ move для клетки (${row},${col}), заменяем старый на новый`);
+                                this.validMoves[existingMoveIndex] = moveObj;
+                            } else {
+                                this.validMoves.push(moveObj);
+                            }
                         }
                     }
                 }
@@ -2863,6 +2917,10 @@
                 const logContent = document.getElementById('logContent');
                 if (!logContent) return;
                 
+                // ВАЖНО: всегда пересчитываем validMoves перед логированием,
+                // чтобы гарантировать актуальность данных для всех preview-клеток
+                this.calculateValidMoves();
+                
                 const directionNames = [
                     'вниз',
                     'правыйнижний',
@@ -2872,10 +2930,23 @@
                     'левыйнижний'
                 ];
                 
-                const previewMap = new Map();
-                for (const move of this.validMoves) {
-                    previewMap.set(`${move.row},${move.col}`, move);
-                }
+                // Вспомогательная функция для получения актуального move
+                // Всегда используем актуальные данные напрямую из this.validMoves
+                const getPreviewMove = (row, col) => {
+                    // Для каждой клетки должен быть только один move (дубликаты предотвращаются в calculateValidMoves)
+                    const move = this.validMoves.find(m => m.row === row && m.col === col);
+                    if (!move) return null;
+                    
+                    // Проверка на дубликаты (на всякий случай)
+                    const moves = this.validMoves.filter(m => m.row === row && m.col === col);
+                    if (moves.length > 1) {
+                        console.error(`[logConnections] КРИТИЧЕСКАЯ ОШИБКА: найдено ${moves.length} move для клетки (${row},${col})!`, moves);
+                        // Берём последний (самый актуальный)
+                        return moves[moves.length - 1];
+                    }
+                    
+                    return move;
+                };
                 
                 let logHtml = '';
                 let lineCounter = 1;
@@ -2887,111 +2958,88 @@
                         
                 for (let dir = 0; dir < 6; dir++) {
                     const dirName = directionNames[dir];
-                            const centerHalf = this.getHalfFacingDirection(cell.orientation, dir);
-                            const centerValue = cell.values[centerHalf];
-                            
                             const neighbor = this.getNeighborInDirection(row, col, dir);
+                            
+                            if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) {
+                                continue;
+                            }
+                            
+                            const neighborCell = this.board[neighbor.row][neighbor.col];
+                            
+                            // Пропускаем preview-соседей - показываем только реальные размещённые доминошки
+                            const move = getPreviewMove(neighbor.row, neighbor.col);
+                            if (move) {
+                                // Сосед является preview-клеткой - пропускаем
+                                continue;
+                            }
+                            
+                            if (!neighborCell) {
+                                // Сосед не является ни размещённой клеткой, ни preview-клеткой - пустая клетка
+                                continue;
+                            }
+                            
+                            // Используем ту же логику, что и в buildManualLogHtml для определения половины и значения
+                            const vertexIdx = this.vertexIndexTowardCell(row, col, neighbor.row, neighbor.col);
+                            const centerHalf = this.getHalfIndexTowardCell(row, col, cell.orientation, neighbor.row, neighbor.col);
+                            const centerValue = centerHalf !== null ? cell.values[centerHalf] : null;
+                            
                             let neighborValue = null;
                             let neighborHalf = null;
-                            let neighborType = 'none';
-                            let neighborPieceValues = null;
-                            let neighborOrientation = null;
-                    
-                    if (neighbor && this.isValidPosition(neighbor.row, neighbor.col)) {
-                                const neighborKey = `${neighbor.row},${neighbor.col}`;
-                                const neighborCell = this.board[neighbor.row][neighbor.col];
+                            let neighborType = 'real';
+                            let neighborPieceValues = neighborCell.values;
+                            
+                            // Определяем половину соседа, смотрящую на нас (точно так же, как в buildManualLogHtml)
+                            const neighborVertexIdx = this.vertexIndexTowardCell(neighbor.row, neighbor.col, row, col);
+                            if (neighborVertexIdx !== null) {
+                                const neighborHalf0 = [
+                                    neighborCell.orientation,
+                                    (neighborCell.orientation + 1) % 6,
+                                    (neighborCell.orientation + 2) % 6
+                                ];
+                                const neighborHalf1 = [
+                                    (neighborCell.orientation + 3) % 6,
+                                    (neighborCell.orientation + 4) % 6,
+                                    (neighborCell.orientation + 5) % 6
+                                ];
                                 
-                                if (neighborCell) {
-                                    neighborType = 'real';
-                                    neighborPieceValues = neighborCell.values;
-                                    neighborOrientation = neighborCell.orientation;
-                                    const vertexFromNeighbor = this.vertexIndexTowardCell(neighbor.row, neighbor.col, row, col);
-                                    
-                                    if (neighborCell.values[0] === neighborCell.values[1]) {
-                                        neighborValue = neighborCell.values[0];
-                                        neighborHalf = 0;
-                                    } else if (vertexFromNeighbor !== null) {
-                                        const neighborHalf0 = [
-                                            neighborCell.orientation,
-                                            (neighborCell.orientation + 1) % 6,
-                                            (neighborCell.orientation + 2) % 6
-                                        ];
-                                        const neighborHalf1 = [
-                                            (neighborCell.orientation + 3) % 6,
-                                            (neighborCell.orientation + 4) % 6,
-                                            (neighborCell.orientation + 5) % 6
-                                        ];
-                                        
-                                        if (neighborHalf0.includes(vertexFromNeighbor)) {
-                                            neighborHalf = 0;
-                                            neighborValue = neighborCell.values[0];
-                                        } else if (neighborHalf1.includes(vertexFromNeighbor)) {
-                                            neighborHalf = 1;
-                                            neighborValue = neighborCell.values[1];
-                                        } else {
-                                            neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, (dir + 3) % 6);
-                                            neighborValue = neighborCell.values[neighborHalf];
-                                        }
-                                    } else {
-                                        neighborHalf = this.getHalfFacingDirection(neighborCell.orientation, (dir + 3) % 6);
-                                        neighborValue = neighborCell.values[neighborHalf];
-                                    }
-                                } else if (previewMap.has(neighborKey)) {
-                                    const move = previewMap.get(neighborKey);
-                                    neighborType = 'preview';
-                                    neighborPieceValues = this.selectedPiece.values;
-                                    const vertexIndex = this.vertexIndexTowardCell(neighbor.row, neighbor.col, row, col);
-                                    
-                                    if (vertexIndex !== null) {
-                                        const half0Vertices = [
-                                            move.orientation,
-                                            (move.orientation + 1) % 6,
-                                            (move.orientation + 2) % 6
-                                        ];
-                                        const half1Vertices = [
-                                            (move.orientation + 3) % 6,
-                                            (move.orientation + 4) % 6,
-                                            (move.orientation + 5) % 6
-                                        ];
-                                        
-                                        if (half0Vertices.includes(vertexIndex)) {
-                                            neighborHalf = 0;
-                                        } else if (half1Vertices.includes(vertexIndex)) {
-                                            neighborHalf = 1;
-                                        } else {
-                                            neighborHalf = this.getHalfFacingDirection(move.orientation, (dir + 3) % 6);
+                                if (neighborHalf0.includes(neighborVertexIdx)) {
+                                    neighborHalf = 0;
+                                } else if (neighborHalf1.includes(neighborVertexIdx)) {
+                                    neighborHalf = 1;
+                                } else {
+                                    // Fallback: используем getHalfIndexTowardCell
+                                    neighborHalf = this.getHalfIndexTowardCell(neighbor.row, neighbor.col, neighborCell.orientation, row, col);
                                 }
                             } else {
-                                        neighborHalf = this.getHalfFacingDirection(move.orientation, (dir + 3) % 6);
+                                // Fallback: используем getHalfIndexTowardCell
+                                neighborHalf = this.getHalfIndexTowardCell(neighbor.row, neighbor.col, neighborCell.orientation, row, col);
                             }
-                                    
-                                    neighborValue = this.selectedPiece.values[neighborHalf];
-                        }
-                    }
-                    
+                            
+                            // Определяем значение соседа на основе определённой половины
+                            if (neighborHalf !== null) {
+                                neighborValue = neighborCell.values[neighborHalf];
+                            } else {
+                                // Если не удалось определить половину, используем getCellValueFacing как fallback
+                                neighborValue = this.getCellValueFacing(neighborCell, neighbor.row, neighbor.col, row, col, (dir + 3) % 6);
+                            }
+                            
+                            // Формируем строку лога
                             let logLine = `${lineCounter++}. (${row},${col}) ${dirName} (${this.getValueLabel(centerValue)})`;
-                    
+                            
                             if (neighborValue !== null) {
                                 const needsRotation = neighborValue !== centerValue;
                                 logLine += `, сосед (${this.getValueLabel(neighborValue)})`;
-                        if (needsRotation) {
-                            logLine += ' (необходим поворот соседа)';
-                        }
-                        
-                                let extra = '';
-                                if (neighborType !== 'none') {
-                                    const pieceStr = this.formatPieceValues(neighborPieceValues);
-                                    extra += `piece=${pieceStr}, type=${neighborType}`;
-                                } else {
-                                    extra += 'piece=—, type=none';
+                                if (needsRotation) {
+                                    logLine += ' (необходим поворот соседа)';
                                 }
                                 
-                                logLine += ` [dir=${dir}, chosenHalf=${neighborHalf ?? '-'}, ${extra}]`;
-                    } else {
-                        logLine += ', сосед отсутствует';
-                    }
-                    
-                    logHtml += `<div class="log-line">${logLine}</div>`;
+                                const pieceStr = this.formatPieceValues(neighborPieceValues);
+                                logLine += ` [dir=${dir}, chosenHalf=${neighborHalf ?? '-'}, piece=${pieceStr}, type=${neighborType}]`;
+                            } else {
+                                logLine += ', сосед отсутствует';
+                            }
+                            
+                            logHtml += `<div class="log-line">${logLine}</div>`;
                         }
                     }
                 }
@@ -3038,6 +3086,15 @@
                 const move = this.validMoves.find(m => m.row === row && m.col === col);
                 const formatVal = (val) => val === null || val === undefined ? '—' : this.getValueLabel(val);
                 
+                const directionNames = [
+                    'вниз (↓)',
+                    'правыйнижний (↘)',
+                    'правыйверхний (↗)',
+                    'вверх (↑)',
+                    'левыйверхний (↖)',
+                    'левыйнижний (↙)'
+                ];
+                
                 lines.push(`<div class="manual-log-line"><strong>Клетка (${row}, ${col})</strong></div>`);
                 
                 if (!move) {
@@ -3045,10 +3102,27 @@
                     return lines.join('');
                 }
                 
+                // Краткое объяснение
+                lines.push(`<div class="manual-log-line" style="margin-top: 8px; padding: 8px; background: rgba(100,150,255,0.1); border-radius: 4px; font-size: 0.9em;">`);
+                lines.push(`<strong>📖 Как читать этот лог:</strong><br/>`);
+                lines.push(`Этот лог показывает информацию о preview-клетке (клетке, которую можно разместить). `);
+                lines.push(`Для каждого из 6 направлений проверяется, есть ли реальный размещённый сосед (preview-соседи игнорируются), `);
+                lines.push(`и совпадают ли цвета соприкасающихся половинок.`);
+                lines.push(`</div>`);
+                
+                // Пояснение к параметрам Move
+                lines.push(`<div class="manual-log-line" style="margin-top: 8px; padding: 8px; background: rgba(0,0,0,0.1); border-radius: 4px;">`);
+                lines.push(`<strong>Параметры размещения:</strong><br/>`);
                 const orientationsText = move.orientations && move.orientations.length
                     ? move.orientations.join(', ')
                     : '—';
-                lines.push(`<div class="manual-log-line">[Move] orientation=${move.orientation}, orientations=[${orientationsText}], activeHalf=${move.activeHalf ?? '—'}, matchDir=${move.matchDir ?? '—'}</div>`);
+                lines.push(`• <strong>orientation</strong>=${move.orientation} — текущая ориентация доминошки (0-5, где 0 = вниз)<br/>`);
+                lines.push(`• <strong>orientations</strong>=[${orientationsText}] — все валидные ориентации для этой клетки<br/>`);
+                lines.push(`• <strong>activeHalf</strong>=${move.activeHalf ?? '—'} — какая половина (0 или 1) соединяется с соседом<br/>`);
+                lines.push(`• <strong>matchDir</strong>=${move.matchDir ?? '—'} — направление (0-5), в котором есть совпадение с соседом`);
+                lines.push(`</div>`);
+                
+                lines.push(`<div class="manual-log-line" style="margin-top: 8px;"><strong>Проверка соседей (6 направлений, только реальные размещённые доминошки):</strong></div>`);
                 
                 for (let dir = 0; dir < 6; dir++) {
                     const neighbor = this.getNeighborInDirection(row, col, dir);
@@ -3058,24 +3132,51 @@
                     }
                     
                     const neighborCell = this.board[neighbor.row][neighbor.col];
+                    // Проверяем, является ли сосед preview клеткой (есть ли для неё move в validMoves)
+                    const neighborMove = this.validMoves.find(m => m.row === neighbor.row && m.col === neighbor.col);
+                    
+                    // Пропускаем preview-соседей - показываем только реальные размещённые доминошки
+                    if (neighborMove) {
+                        lines.push(`<div class="manual-log-line" style="margin-left: 16px; padding: 4px 0;">`);
+                        lines.push(`<strong>dir ${dir}</strong> (${directionNames[dir]}) → [${neighbor.row},${neighbor.col}]: <span style="color: #888;">сосед является preview-клеткой (пропускаем)</span>`);
+                        lines.push(`</div>`);
+                        continue;
+                    }
+                    
                     if (!neighborCell) {
-                        lines.push(`<div class="manual-log-line">dir ${dir}: сосед пуст</div>`);
+                        lines.push(`<div class="manual-log-line" style="margin-left: 16px; padding: 4px 0;">`);
+                        lines.push(`<strong>dir ${dir}</strong> (${directionNames[dir]}): <span style="color: #888;">сосед пуст</span>`);
+                        lines.push(`</div>`);
                         continue;
                     }
                     
                     const vertexIdx = this.vertexIndexTowardCell(row, col, neighbor.row, neighbor.col);
                     const half = this.getHalfIndexTowardCell(row, col, move.orientation, neighbor.row, neighbor.col);
-                    const selectedValue = half !== null ? this.selectedPiece.values[half] : null;
+                    if (!move.values || !Array.isArray(move.values) || move.values.length !== 2) {
+                        lines.push(`<div class="manual-log-line">dir ${dir}: ОШИБКА - move.values отсутствуют для (${row},${col})</div>`);
+                        continue;
+                    }
+                    const moveValues = move.values;
+                    const selectedValue = half !== null ? moveValues[half] : null;
                     
+                    // Определяем значения соседа (только для реальных размещённых доминошек)
+                    const neighborPieceValues = neighborCell.values;
                     const neighborValue = this.getCellValueFacing(neighborCell, neighbor.row, neighbor.col, row, col, (dir + 3) % 6);
+                    
                     const matches = selectedValue !== null && neighborValue !== null && selectedValue === neighborValue;
                     
-                    lines.push(
-                        `<div class="manual-log-line">dir ${dir} → [${neighbor.row},${neighbor.col}] ` +
-                        `vertex=${vertexIdx ?? '—'} half=${half ?? '—'} ` +
-                        `ours=${formatVal(selectedValue)} | neighbor=${formatVal(neighborValue)} ` +
-                        `${matches ? '✓' : '✗'} piece=${this.formatPieceValues(neighborCell.values)}</div>`
-                    );
+                    // Форматируем строку с подробным пояснением
+                    let line = `<div class="manual-log-line" style="margin-left: 16px; padding: 4px 0;">`;
+                    line += `<strong>dir ${dir}</strong> (${directionNames[dir]}) → [${neighbor.row},${neighbor.col}]`;
+                    line += `<br/>`;
+                    line += `&nbsp;&nbsp;• <strong>vertex</strong>=${vertexIdx ?? '—'} — индекс вершины гексагона, указывающей на соседа<br/>`;
+                    line += `&nbsp;&nbsp;• <strong>half</strong>=${half ?? '—'} — какая половина нашей доминошки (0 или 1) смотрит на соседа<br/>`;
+                    line += `&nbsp;&nbsp;• <strong>ours</strong>=<span style="color: ${matches ? '#0f0' : '#f00'};">${formatVal(selectedValue)}</span> — цвет нашей половины, смотрящей на соседа<br/>`;
+                    line += `&nbsp;&nbsp;• <strong>neighbor</strong>=<span style="color: ${matches ? '#0f0' : '#f00'};">${formatVal(neighborValue)}</span> — цвет половины соседа, смотрящей на нас<br/>`;
+                    line += `&nbsp;&nbsp;• <strong>совпадение</strong>: <span style="color: ${matches ? '#0f0' : '#f00'}; font-weight: bold;">${matches ? '✓ ДА' : '✗ НЕТ'}</span><br/>`;
+                    line += `&nbsp;&nbsp;• <strong>piece соседа</strong>=${this.formatPieceValues(neighborPieceValues)} — значения доминошки соседа`;
+                    line += `</div>`;
+                    lines.push(line);
                 }
                 
                 console.groupCollapsed(`[ManualLog] Клетка (${row},${col})`);
@@ -3106,8 +3207,6 @@
                 // Рисуем используя мировые координаты (трансформация уже применена через ctx.scale)
                 this.ctx.save();
                 this.ctx.globalAlpha = 1;
-                
-                const values = this.selectedPiece.values;
                 
                 const polygonCentroid = (pts) => {
                     let a = 0, cx = 0, cy = 0;
@@ -3144,6 +3243,24 @@
                 for (const move of this.validMoves) {
                     // Используем ориентацию из validMoves для каждого превью
                     const renderOrientation = move.orientation;
+                    // ВАЖНО: всегда используем values из move - они должны быть сохранены в calculateValidMoves
+                    if (!move.values || !Array.isArray(move.values) || move.values.length !== 2) {
+                        console.error(`[drawValidMoves] move.values missing or invalid for cell (${move.row},${move.col})`, move);
+                        continue; // Пропускаем этот move, если values отсутствуют
+                    }
+                    const values = move.values;
+                    
+                    // Проверка на рассинхронизацию: если values повреждены или не соответствуют ожидаемому формату - это баг
+                    if (!values || values.length !== 2 || typeof values[0] !== 'number' || typeof values[1] !== 'number') {
+                        console.error(`[drawValidMoves] ПОВРЕЖДЁННЫЕ values для клетки (${move.row},${move.col}):`, values, 'move:', move);
+                        continue;
+                    }
+                    
+                    // Проверка: если values не заморожены (Object.isFrozen доступен), они могли быть изменены после сохранения
+                    if (typeof Object.isFrozen === 'function' && !Object.isFrozen(values)) {
+                        console.warn(`[drawValidMoves] values НЕ ЗАМОРОЖЕНЫ для клетки (${move.row},${move.col}) - возможна причина бага!`, values);
+                    }
+                    
                     const center = this.getHexCenter(move.row, move.col);
                     const hexSize = center.hexSize;
                     const x = center.x;
@@ -3175,77 +3292,11 @@
                         (renderOrientation + 5) % 6
                     ];
                     
-                    // Определяем, какая половина обращена к целевому соседу
-                    let highlightedHalf = typeof move.activeHalf === 'number' ? move.activeHalf : null;
+                    // Используем activeHalf из move - он уже определён в calculateValidMoves
+                    const highlightedHalf = typeof move.activeHalf === 'number' ? move.activeHalf : null;
                     
-                    if (centerRow !== null && centerCol !== null && highlightedHalf === null) {
-                        const dirToCenter = this.getDirectionToNeighbor(move.row, move.col, centerRow, centerCol);
-                        if (dirToCenter !== null) {
-                            const half = this.getHalfIndexTowardCell(move.row, move.col, renderOrientation, centerRow, centerCol);
-                            if (half !== null) {
-                                highlightedHalf = half;
-                            }
-                        }
-                    }
-                    
-                    if (highlightedHalf === null && move.matchDir !== null) {
-                        const neighbor = this.getNeighborInDirection(move.row, move.col, move.matchDir);
-                        if (neighbor && this.isValidPosition(neighbor.row, neighbor.col)) {
-                            const half = this.getHalfIndexTowardCell(move.row, move.col, renderOrientation, neighbor.row, neighbor.col);
-                            if (half !== null) {
-                                highlightedHalf = half;
-                            }
-                        }
-                    }
-                    
-                    if (highlightedHalf === null) {
-                        for (let dir = 0; dir < 6; dir++) {
-                            const neighbor = this.getNeighborInDirection(move.row, move.col, dir);
-                            if (!neighbor || !this.isValidPosition(neighbor.row, neighbor.col)) continue;
-                            const neighborCell = this.board[neighbor.row][neighbor.col];
-                            if (!neighborCell) continue;
-                            
-                            const half = this.getHalfIndexTowardCell(move.row, move.col, renderOrientation, neighbor.row, neighbor.col);
-                            if (half === null) continue;
-                            
-                            const vertexFromNeighbor = this.vertexIndexTowardCell(neighbor.row, neighbor.col, move.row, move.col);
-                            let neighborValue = null;
-                            if (neighborCell.values[0] === neighborCell.values[1]) {
-                                neighborValue = neighborCell.values[0];
-                            } else if (vertexFromNeighbor !== null) {
-                                const neighborHalf0 = [
-                                    neighborCell.orientation,
-                                    (neighborCell.orientation + 1) % 6,
-                                    (neighborCell.orientation + 2) % 6
-                                ];
-                                const neighborHalf1 = [
-                                    (neighborCell.orientation + 3) % 6,
-                                    (neighborCell.orientation + 4) % 6,
-                                    (neighborCell.orientation + 5) % 6
-                                ];
-                                if (neighborHalf0.includes(vertexFromNeighbor)) {
-                                    neighborValue = neighborCell.values[0];
-                                } else if (neighborHalf1.includes(vertexFromNeighbor)) {
-                                    neighborValue = neighborCell.values[1];
-                                } else {
-                                    const facingHalf = this.getHalfFacingDirection(neighborCell.orientation, (dir + 3) % 6);
-                                    neighborValue = neighborCell.values[facingHalf];
-                                }
-                            } else {
-                                const facingHalf = this.getHalfFacingDirection(neighborCell.orientation, (dir + 3) % 6);
-                                neighborValue = neighborCell.values[facingHalf];
-                            }
-                            
-                            const currentValue = values[half];
-                            if (neighborValue === currentValue) {
-                                highlightedHalf = half;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    const half0Alpha = highlightedHalf === 0 ? 0.95 : 0.2;
-                    const half1Alpha = highlightedHalf === 1 ? 0.95 : 0.2;
+                    // Убираем прозрачность - используем полную непрозрачность для обеих половин
+                    const alpha = 1.0;
                     
                     this.ctx.beginPath();
                     this.ctx.moveTo(vertices[dividerStartIdx].x, vertices[dividerStartIdx].y);
@@ -3255,7 +3306,9 @@
                     }
                     this.ctx.lineTo(vertices[dividerEndIdx].x, vertices[dividerEndIdx].y);
                     this.ctx.closePath();
-                    this.ctx.fillStyle = this.getValueColor(values[0], half0Alpha);
+                    // КРИТИЧЕСКИ ВАЖНО: используем values из move, а не из this.selectedPiece
+                    const color0 = this.getValueColor(values[0], alpha);
+                    this.ctx.fillStyle = color0;
                     this.ctx.fill();
                     
                     // Рисуем вторую половину (values[1])
@@ -3267,27 +3320,29 @@
                     }
                     this.ctx.lineTo(vertices[dividerStartIdx].x, vertices[dividerStartIdx].y);
                     this.ctx.closePath();
-                    this.ctx.fillStyle = this.getValueColor(values[1], half1Alpha);
+                    // КРИТИЧЕСКИ ВАЖНО: используем values из move, а не из this.selectedPiece
+                    const color1 = this.getValueColor(values[1], alpha);
+                    this.ctx.fillStyle = color1;
                     this.ctx.fill();
                     
-                    // Рисуем контур шестиугольника
+                    // Рисуем толстую чёрную обводку вокруг всего шестиугольника
                     this.ctx.beginPath();
                     for (let i = 0; i < 6; i++) {
                         if (i === 0) this.ctx.moveTo(vertices[i].x, vertices[i].y);
                         else this.ctx.lineTo(vertices[i].x, vertices[i].y);
                     }
                     this.ctx.closePath();
-                    this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.5)';
-                    this.ctx.lineWidth = 2 / this.camera.scale;
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
+                    this.ctx.lineWidth = 4 / this.camera.scale;
                     this.ctx.stroke();
                     
-                    // Рисуем разделительную полосу
+                    // Рисуем разделительную полосу (чёрная и толстая)
                     const dividerStart = vertices[dividerStartIdx];
                     const dividerEnd = vertices[dividerEndIdx];
                     this.ctx.beginPath();
                     this.ctx.moveTo(dividerStart.x, dividerStart.y);
                     this.ctx.lineTo(dividerEnd.x, dividerEnd.y);
-                    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                    this.ctx.strokeStyle = 'rgba(0, 0, 0, 1)';
                     this.ctx.lineWidth = 3 / this.camera.scale;
                     this.ctx.stroke();
                     
@@ -3316,9 +3371,13 @@
                     m.row === this.hoveredHex.row && m.col === this.hoveredHex.col
                 );
                 
+                // Если для этой клетки уже есть валидный ход, превью уже нарисовано в drawValidMoves
+                // Рисуем только если move не найден (невалидная клетка)
+                if (move) return;
+                
                 // Рисуем используя мировые координаты (трансформация уже применена через ctx.scale)
                 const center = this.getHexCenter(this.hoveredHex.row, this.hoveredHex.col);
-                const orientation = move ? move.orientation : this.pieceOrientation;
+                const orientation = this.pieceOrientation;
                 
                 this.ctx.save();
                 this.ctx.globalAlpha = 0.6;
@@ -3333,12 +3392,13 @@
                     });
                 }
                 
-                const values = this.selectedPiece.values;
                 const dividerStartIdx = (orientation - 1 + 6) % 6;
                 const dividerEndIdx = (orientation + 2 + 6) % 6;
                 
-                const isActiveMove = Boolean(move);
-                const previewActiveHalf = move && typeof move.activeHalf === 'number' ? move.activeHalf : null;
+                // move всегда null здесь (если move найден, функция вернулась раньше)
+                const values = this.selectedPiece.values;
+                const isActiveMove = false;
+                const previewActiveHalf = null;
                 const half0Alpha = previewActiveHalf === null ? 0.65 : (previewActiveHalf === 0 ? 0.9 : 0.2);
                 const half1Alpha = previewActiveHalf === null ? 0.65 : (previewActiveHalf === 1 ? 0.9 : 0.2);
                 
