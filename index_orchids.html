@@ -63,6 +63,13 @@
       border-radius: 10px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
       height: 600px;
+      overflow: hidden; /* Скрываем всё, что выходит за границы */
+    }
+    
+    #gameBoard {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
     
     .log-panel {
@@ -210,7 +217,7 @@
     <div class="game-area">
       <div class="board-container">
         <div class="board">
-          <svg id="gameBoard" viewBox="0 0 1000 600"></svg>
+          <svg id="gameBoard" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
         
         <div class="log-panel" id="logPanel" style="display: none;">
@@ -243,14 +250,25 @@
 
   <script>
     // Константы
-    const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#ec4899'];
+    const COLORS = [
+      '#FF0000', // 🔴 Ярко‑красный
+      '#FF7F00', // 🟠 Оранжево‑янтарный
+      '#FFD700', // 🟡 Ярко‑жёлтый
+      '#32CD32', // 🟢 Лаймово‑зелёный
+      '#0066FF', // 🔵 Электрик‑синий
+      '#8000FF', // 🟣 Фиолетовый
+      '#FF1493', // 🌸 Малиново‑розовый
+      '#00FFFF'  // 🧊 Бирюзовый
+    ];
     const COLOR_NAMES = {
-      '#ef4444': 'красный',
-      '#3b82f6': 'синий',
-      '#22c55e': 'зелёный',
-      '#eab308': 'жёлтый',
-      '#a855f7': 'фиолетовый',
-      '#ec4899': 'розовый'
+      '#FF0000': 'ярко‑красный',
+      '#FF7F00': 'оранжево‑янтарный',
+      '#FFD700': 'ярко‑жёлтый',
+      '#32CD32': 'лаймово‑зелёный',
+      '#0066FF': 'электрик‑синий',
+      '#8000FF': 'фиолетовый',
+      '#FF1493': 'малиново‑розовый',
+      '#00FFFF': 'бирюзовый'
     };
     const HEX_SIZE = 40;
     
@@ -708,7 +726,7 @@
       // Преобразуем все координаты в пиксели
       const pixels = allCoords.map(coord => hexToPixel(coord.q, coord.r));
       
-      // Находим границы
+      // Находим границы центров доминошек
       let minX = Infinity, maxX = -Infinity;
       let minY = Infinity, maxY = -Infinity;
       
@@ -719,12 +737,15 @@
         maxY = Math.max(maxY, y);
       });
       
-      // Добавляем отступы
-      const padding = HEX_SIZE * 2;
-      minX -= padding;
-      maxX += padding;
-      minY -= padding;
-      maxY += padding;
+      // Добавляем размер доминошек (радиус HEX_SIZE) и отступы
+      // HEX_SIZE - это расстояние от центра до вершины, но нам нужно расстояние до края
+      // Высота шестиугольника = 2 * HEX_SIZE, радиус описанной окружности = HEX_SIZE
+      const hexRadius = HEX_SIZE * 1.1; // Небольшой запас для видимости краёв
+      const padding = HEX_SIZE * 1.5; // Больший отступ для видимости
+      minX -= hexRadius + padding;
+      maxX += hexRadius + padding;
+      minY -= hexRadius + padding;
+      maxY += hexRadius + padding;
       
       // Вычисляем центр
       const centerX = (minX + maxX) / 2;
@@ -751,27 +772,61 @@
       
       // Получаем размер контейнера SVG
       const boardElement = document.querySelector('.board');
-      const svgWidth = boardElement ? boardElement.clientWidth - 40 : 1000; // -40 для padding
-      const svgHeight = boardElement ? boardElement.clientHeight - 40 : 600;
+      let svgWidth, svgHeight;
       
-      // Вычисляем масштаб, чтобы всё поместилось с небольшим отступом
-      // SVG автоматически масштабирует содержимое на основе viewBox
-      // Если viewBox больше размера SVG - содержимое уменьшится
-      // Если viewBox меньше размера SVG - содержимое увеличится
-      const scaleX = svgWidth / boardWidth;
-      const scaleY = svgHeight / boardHeight;
-      const scale = Math.min(scaleX, scaleY); // Выбираем меньший масштаб для вписывания
+      if (boardElement) {
+        svgWidth = boardElement.clientWidth - 40; // -40 для padding
+        svgHeight = boardElement.clientHeight - 40;
+      } else {
+        // Если элемент не найден, используем размеры SVG
+        svgWidth = svg.clientWidth || 1000;
+        svgHeight = svg.clientHeight || 600;
+      }
       
-      // viewBox должен содержать все координаты
-      // SVG сам масштабирует, чтобы viewBox поместился в размер SVG
-      const viewBoxWidth = boardWidth;
-      const viewBoxHeight = boardHeight;
+      // Минимальные размеры для viewBox
+      if (svgWidth <= 0) svgWidth = 1000;
+      if (svgHeight <= 0) svgHeight = 600;
+      
+      // Упрощённый подход: viewBox должен содержать все координаты
+      // SVG автоматически масштабирует содержимое, чтобы viewBox поместился в размер SVG
+      const contentAspect = boardWidth / boardHeight;
+      const containerAspect = svgWidth / svgHeight;
+      
+      let viewBoxWidth, viewBoxHeight;
+      
+      // Сначала убеждаемся, что viewBox содержит всё содержимое
+      viewBoxWidth = boardWidth;
+      viewBoxHeight = boardHeight;
+      
+      // Теперь подстраиваем под соотношение сторон контейнера
+      // но сохраняя все содержимое видимым
+      if (contentAspect > containerAspect) {
+        // Содержимое шире - нужно увеличить высоту viewBox
+        const neededHeight = boardWidth / containerAspect;
+        if (neededHeight > boardHeight) {
+          viewBoxHeight = neededHeight;
+        }
+      } else {
+        // Содержимое выше - нужно увеличить ширину viewBox
+        const neededWidth = boardHeight * containerAspect;
+        if (neededWidth > boardWidth) {
+          viewBoxWidth = neededWidth;
+        }
+      }
+      
+      // Финальная проверка: viewBox должен гарантированно содержать все координаты
+      const margin = Math.max(boardWidth, boardHeight) * 0.1; // 10% запас
+      if (viewBoxWidth < boardWidth + margin) viewBoxWidth = boardWidth + margin;
+      if (viewBoxHeight < boardHeight + margin) viewBoxHeight = boardHeight + margin;
+      
+      // Центрируем viewBox относительно центра содержимого
       const viewBoxX = bounds.centerX - viewBoxWidth / 2;
       const viewBoxY = bounds.centerY - viewBoxHeight / 2;
       
       svg.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`);
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet'); // Центрируем и масштабируем, сохраняя пропорции
       
-      // Центр для отрисовки (теперь относительно viewBox)
+      // Центр для отрисовки (используем реальные координаты)
       const centerX = bounds.centerX;
       const centerY = bounds.centerY;
       
