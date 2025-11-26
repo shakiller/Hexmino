@@ -48,6 +48,42 @@
     .game-area {
       display: flex;
       gap: 20px;
+      align-items: flex-start;
+    }
+    
+    .player-panel {
+      width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .player-panel.inactive {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    
+    .player-panel.active {
+      opacity: 1;
+    }
+    
+    .player-title {
+      font-weight: bold;
+      font-size: 18px;
+      padding: 10px;
+      border-radius: 8px;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    
+    .player-panel.active .player-title {
+      background: #3b82f6;
+      color: white;
+    }
+    
+    .player-panel.inactive .player-title {
+      background: #94a3b8;
+      color: white;
     }
     
     .board-container {
@@ -207,14 +243,36 @@
       </div>
       <div style="display: flex; align-items: center; gap: 20px;">
         <div>
-          <div style="font-size: 14px; color: #64748b;">Счёт</div>
-          <div class="score" id="score">0</div>
+          <div style="font-size: 14px; color: #64748b;">Режим игры</div>
+          <select id="gameMode" style="padding: 8px 12px; border-radius: 6px; border: 2px solid #cbd5e1; font-size: 14px; cursor: pointer;">
+            <option value="single">1 игрок</option>
+            <option value="two">2 игрока</option>
+            <option value="bot">Игра с ботом</option>
+            <option value="online">Онлайн</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size: 14px; color: #64748b;">Ход игрока</div>
+          <div class="score" id="currentPlayerDisplay">Игрок 1</div>
         </div>
         <button class="reset-btn" onclick="resetGame()">🔄 Сброс</button>
       </div>
     </div>
     
     <div class="game-area">
+      <!-- Игрок 1 (слева) -->
+      <div class="player-panel" id="playerPanel0">
+        <div class="player-title" id="playerTitle0">Игрок 1</div>
+        <div class="panel">
+          <div class="panel-title">Доступные доминошки</div>
+          <div class="available-pieces" id="availablePieces0"></div>
+          <button class="bazaar-btn" id="bazaarBtn0" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
+            Взять из базара (<span id="bazaarCount0">0</span>)
+          </button>
+        </div>
+      </div>
+      
+      <!-- Основное поле (центр) -->
       <div class="board-container">
         <div class="board">
           <svg id="gameBoard" preserveAspectRatio="xMidYMid meet"></svg>
@@ -226,23 +284,15 @@
         </div>
       </div>
       
-      <div class="sidebar">
+      <!-- Игрок 2 (справа) -->
+      <div class="player-panel" id="playerPanel1">
+        <div class="player-title" id="playerTitle1">Игрок 2</div>
         <div class="panel">
           <div class="panel-title">Доступные доминошки</div>
-          <div class="available-pieces" id="availablePieces"></div>
-          <button class="bazaar-btn" id="bazaarBtn" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
-            Взять из базара (<span id="bazaarCount">0</span>)
+          <div class="available-pieces" id="availablePieces1"></div>
+          <button class="bazaar-btn" id="bazaarBtn1" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
+            Взять из базара (<span id="bazaarCount1">0</span>)
           </button>
-        </div>
-        
-        <div class="panel">
-          <div class="panel-title">Как играть</div>
-          <ul class="instructions">
-            <li>• Выберите доминошку</li>
-            <li>• Поверните её кнопкой поворота</li>
-            <li>• Щёлкните на свободное место</li>
-            <li>• Цвета должны совпадать!</li>
-          </ul>
         </div>
       </div>
     </div>
@@ -273,12 +323,16 @@
     const HEX_SIZE = 40;
     
     // Состояние игры
+    let gameMode = 'single'; // 'single', 'two', 'bot', 'online'
     let placedPieces = [];
-    let availablePieces = [];
-    let bazaarPieces = []; // Оставшиеся доминошки в базаре
+    let players = [
+      { id: 0, name: 'Игрок 1', pieces: [], bazaarPieces: [], isBot: false },
+      { id: 1, name: 'Игрок 2', pieces: [], bazaarPieces: [], isBot: false }
+    ];
+    let currentPlayer = 0; // Текущий игрок (0 или 1)
     let selectedPiece = null;
-    let score = 0;
     let logMessages = [];
+    let isBotThinking = false; // Флаг, что бот думает
     
     // Утилиты для hex координат
     function hexToPixel(q, r) {
@@ -982,11 +1036,50 @@
       });
     }
     
+    function updatePlayerPanels() {
+      // Обновляем визуальное состояние панелей игроков
+      for (let i = 0; i < 2; i++) {
+        const panel = document.getElementById(`playerPanel${i}`);
+        if (!panel) continue;
+        
+        // В режиме одного игрока скрываем панель второго игрока
+        if (gameMode === 'single' && i === 1) {
+          panel.style.display = 'none';
+          continue;
+        }
+        
+        panel.style.display = 'flex';
+        
+        if (i === currentPlayer) {
+          panel.classList.remove('inactive');
+          panel.classList.add('active');
+        } else {
+          panel.classList.remove('active');
+          panel.classList.add('inactive');
+        }
+        
+        // Обновляем имя игрока (для бота)
+        const title = document.getElementById(`playerTitle${i}`);
+        if (title) {
+          if (players[i].isBot) {
+            title.textContent = `${players[i].name} (Бот)`;
+          } else {
+            title.textContent = players[i].name;
+          }
+        }
+      }
+    }
+    
     function renderAvailablePieces() {
-      const container = document.getElementById('availablePieces');
-      container.innerHTML = '';
-      
-      availablePieces.forEach(piece => {
+      // Отрисовываем доминошки для обоих игроков
+      for (let playerId = 0; playerId < 2; playerId++) {
+        const container = document.getElementById(`availablePieces${playerId}`);
+        container.innerHTML = '';
+        
+        const player = players[playerId];
+        const isCurrentPlayer = playerId === currentPlayer;
+        
+        player.pieces.forEach(piece => {
         const card = document.createElement('div');
         card.className = 'piece-card';
         if (selectedPiece && selectedPiece.id === piece.id) {
@@ -1044,34 +1137,46 @@
         const rotateBtn = document.createElement('button');
         rotateBtn.className = 'rotate-btn';
         rotateBtn.textContent = '↻';
-        rotateBtn.onclick = (e) => {
-          e.stopPropagation();
-          piece.rotation = (piece.rotation + 1) % 6;
-          if (selectedPiece && selectedPiece.id === piece.id) {
-            selectedPiece.rotation = piece.rotation;
-            // Обновляем доску, чтобы превью обновилось с новым поворотом
-            renderBoard();
-          }
-          renderAvailablePieces();
-        };
+          rotateBtn.onclick = (e) => {
+            e.stopPropagation();
+            // Блокируем поворот для неактивного игрока
+            if (!isCurrentPlayer) return;
+            
+            piece.rotation = (piece.rotation + 1) % 6;
+            if (selectedPiece && selectedPiece.id === piece.id) {
+              selectedPiece.rotation = piece.rotation;
+              // Обновляем доску, чтобы превью обновилось с новым поворотом
+              renderBoard();
+            }
+            renderAvailablePieces();
+          };
         
-        card.onclick = () => {
-          selectedPiece = piece;
-          // Убираем автоматический анализ поворотов - он нужен только для отладки
-          // analyzePieceRotations(piece);
-          // Очищаем лог, если он был открыт для предыдущей доминошки
-          logMessages = [];
-          updateLogDisplay();
-          renderAvailablePieces();
-          renderBoard();
-        };
+          card.onclick = () => {
+            // Блокируем клики для неактивного игрока
+            if (!isCurrentPlayer) {
+              alert(`Сейчас ход ${players[currentPlayer].name}!`);
+              return;
+            }
+            
+            selectedPiece = piece;
+            // Убираем автоматический анализ поворотов - он нужен только для отладки
+            // analyzePieceRotations(piece);
+            // Очищаем лог, если он был открыт для предыдущей доминошки
+            logMessages = [];
+            updateLogDisplay();
+            renderAvailablePieces();
+            renderBoard();
+          };
         
         // Анализ поворотов полностью отключен - лог скрыт
         
-        card.appendChild(svg);
-        card.appendChild(rotateBtn);
-        container.appendChild(card);
-      });
+          card.appendChild(svg);
+          card.appendChild(rotateBtn);
+          container.appendChild(card);
+        });
+      }
+      
+      updatePlayerPanels();
     }
     
     function analyzePieceRotations(piece) {
@@ -1278,20 +1383,96 @@
       // Размещаем доминошку
       placedPieces.push({ coord, piece: pieceToPlace });
       
-      // Удаляем доминошку из доступных (не генерируем новые)
-      availablePieces = availablePieces.filter(p => p.id !== selectedPiece.id);
+      // Удаляем доминошку из доступных текущего игрока
+      const currentPlayerObj = players[currentPlayer];
+      currentPlayerObj.pieces = currentPlayerObj.pieces.filter(p => p.id !== selectedPiece.id);
       selectedPiece = null;
-      score += 10;
       
-      document.getElementById('score').textContent = score;
+      // Переключаем игрока (кроме режима одного игрока)
+      if (gameMode !== 'single') {
+        currentPlayer = (currentPlayer + 1) % 2;
+      }
+      
+      // Обновляем отображение текущего игрока
+      updateCurrentPlayerDisplay();
       
       // Обновляем отображение
       renderBoard();
       renderAvailablePieces();
-      updateBazaarButton();
+      updateBazaarButtons();
+      
+      // Если следующий игрок - бот, делаем его ход
+      if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking) {
+        setTimeout(() => makeBotMove(), 500); // Небольшая задержка для визуализации
+      }
       
       // Очищаем лог при новом ходе (опционально, можно оставить историю)
       // logMessages = [];
+    }
+    
+    function updateCurrentPlayerDisplay() {
+      const display = document.getElementById('currentPlayerDisplay');
+      if (display) {
+        if (gameMode === 'single') {
+          display.textContent = 'Ваш ход';
+        } else {
+          display.textContent = players[currentPlayer].name + (players[currentPlayer].isBot ? ' (Бот)' : '');
+        }
+      }
+    }
+    
+    function makeBotMove() {
+      if (isBotThinking) return;
+      isBotThinking = true;
+      
+      const bot = players[currentPlayer];
+      const availablePositions = getAvailablePositions();
+      
+      // Пробуем найти валидный ход для любой доминошки бота
+      let moveFound = false;
+      
+      for (const piece of bot.pieces) {
+        // Пробуем все повороты доминошки
+        for (let rotation = 0; rotation < 6; rotation++) {
+          piece.rotation = rotation;
+          
+          // Ищем валидную позицию для этой доминошки
+          for (const coord of availablePositions) {
+            if (canPlacePiece(piece, coord)) {
+              // Нашли валидный ход!
+              selectedPiece = piece;
+              placePiece(coord);
+              isBotThinking = false;
+              moveFound = true;
+              return;
+            }
+          }
+        }
+      }
+      
+      // Если не нашли валидный ход, пробуем взять из базара
+      if (!moveFound && bot.bazaarPieces.length > 0) {
+        takeFromBazaar(currentPlayer);
+        // После взятия из базара пробуем снова
+        setTimeout(() => {
+          if (currentPlayer === 1 && players[1].isBot && !isBotThinking) {
+            makeBotMove();
+          } else {
+            isBotThinking = false;
+          }
+        }, 300);
+        return;
+      }
+      
+      // Если ничего не получилось, передаём ход
+      if (!moveFound) {
+        isBotThinking = false;
+        alert('Бот не может сделать ход. Переход хода.');
+        currentPlayer = (currentPlayer + 1) % 2;
+        updateCurrentPlayerDisplay();
+        renderAvailablePieces();
+        updateBazaarButtons();
+      }
     }
     
     function resetGame() {
@@ -1306,56 +1487,112 @@
       startPiece.rotation = Math.floor(Math.random() * 6); // Случайный поворот для начала
       placedPieces = [{ coord: { q: 0, r: 0, s: 0 }, piece: startPiece }];
       
-      // Первые 6 доминошек доступны игроку, остальные в базаре
-      availablePieces = shuffled.slice(1, 7).map(piece => ({ ...piece, rotation: 0 }));
-      bazaarPieces = shuffled.slice(7).map(piece => ({ ...piece, rotation: 0 }));
+      // Устанавливаем режим игры и статус бота
+      const modeSelect = document.getElementById('gameMode');
+      if (modeSelect) {
+        gameMode = modeSelect.value;
+      }
       
+      // Настраиваем игроков в зависимости от режима
+      if (gameMode === 'single') {
+        // В режиме одного игрока - все доминошки игроку, второй игрок не используется
+        players[0].pieces = shuffled.slice(1, 7).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].bazaarPieces = shuffled.slice(7).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].isBot = false;
+        players[1].pieces = [];
+        players[1].bazaarPieces = [];
+        players[1].isBot = false;
+      } else if (gameMode === 'bot') {
+        // В режиме с ботом - второй игрок бот
+        players[0].pieces = shuffled.slice(1, 7).map(piece => ({ ...piece, rotation: 0 }));
+        players[1].pieces = shuffled.slice(7, 13).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].bazaarPieces = shuffled.slice(13, Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
+        players[1].bazaarPieces = shuffled.slice(Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].isBot = false;
+        players[1].isBot = true;
+        players[1].name = 'Бот';
+      } else if (gameMode === 'two') {
+        // В режиме двух игроков - оба игрока
+        players[0].pieces = shuffled.slice(1, 7).map(piece => ({ ...piece, rotation: 0 }));
+        players[1].pieces = shuffled.slice(7, 13).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].bazaarPieces = shuffled.slice(13, Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
+        players[1].bazaarPieces = shuffled.slice(Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].isBot = false;
+        players[1].isBot = false;
+        players[0].name = 'Игрок 1';
+        players[1].name = 'Игрок 2';
+      } else if (gameMode === 'online') {
+        // Онлайн режим - пока работает как два игрока (для будущей реализации)
+        players[0].pieces = shuffled.slice(1, 7).map(piece => ({ ...piece, rotation: 0 }));
+        players[1].pieces = shuffled.slice(7, 13).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].bazaarPieces = shuffled.slice(13, Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
+        players[1].bazaarPieces = shuffled.slice(Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].isBot = false;
+        players[1].isBot = false;
+        players[0].name = 'Вы';
+        players[1].name = 'Соперник';
+        // TODO: Добавить подключение к серверу для онлайн игры
+        alert('Онлайн режим: подключение к серверу будет добавлено позже. Сейчас работает как два игрока.');
+      }
+      
+      currentPlayer = 0; // Начинает первый игрок
       selectedPiece = null;
-      score = 0;
       logMessages = [];
+      isBotThinking = false;
       
       // Скрываем панель лога в игровом режиме
       document.getElementById('logPanel').style.display = 'none';
       
-      document.getElementById('score').textContent = score;
-      
-      // Убираем лог из игрового процесса
-      // const sideColors = [];
-      // for (let i = 0; i < 6; i++) {
-      //   const color = getColorAtSide(startPiece, i);
-      //   sideColors.push(`${i} - ${COLOR_NAMES[color]}`);
-      // }
-      // addLogMessage(`Установленная доминошка: ${sideColors.join(', ')}`);
+      // Обновляем отображение текущего игрока
+      updateCurrentPlayerDisplay();
       
       renderBoard();
       renderAvailablePieces();
-      updateBazaarButton();
+      updateBazaarButtons();
+      
+      // Если первый игрок - бот, делаем его ход
+      if (gameMode === 'bot' && players[0].isBot && !isBotThinking) {
+        setTimeout(() => makeBotMove(), 500);
+      }
     }
     
-    function takeFromBazaar() {
-      if (bazaarPieces.length === 0) {
+    function takeFromBazaar(playerId) {
+      const player = players[playerId];
+      if (player.bazaarPieces.length === 0) {
         alert('Базар пуст!');
         return;
       }
       
-      // Берём случайную доминошку из базара
-      const randomIndex = Math.floor(Math.random() * bazaarPieces.length);
-      const piece = bazaarPieces.splice(randomIndex, 1)[0];
+      // Берём случайную доминошку из базара игрока
+      const randomIndex = Math.floor(Math.random() * player.bazaarPieces.length);
+      const piece = player.bazaarPieces.splice(randomIndex, 1)[0];
       piece.rotation = 0;
-      availablePieces.push(piece);
+      player.pieces.push(piece);
       
       renderAvailablePieces();
-      updateBazaarButton();
+      updateBazaarButtons();
     }
     
-    function updateBazaarButton() {
-      const btn = document.getElementById('bazaarBtn');
-      const count = document.getElementById('bazaarCount');
-      if (btn && count) {
-        count.textContent = bazaarPieces.length;
-        btn.disabled = bazaarPieces.length === 0;
-        btn.style.opacity = bazaarPieces.length === 0 ? '0.5' : '1';
-        btn.style.cursor = bazaarPieces.length === 0 ? 'not-allowed' : 'pointer';
+    function updateBazaarButtons() {
+      for (let i = 0; i < 2; i++) {
+        const player = players[i];
+        const btn = document.getElementById(`bazaarBtn${i}`);
+        const count = document.getElementById(`bazaarCount${i}`);
+        if (btn && count) {
+          count.textContent = player.bazaarPieces.length;
+          btn.disabled = player.bazaarPieces.length === 0 || i !== currentPlayer;
+          btn.style.opacity = (player.bazaarPieces.length === 0 || i !== currentPlayer) ? '0.5' : '1';
+          btn.style.cursor = (player.bazaarPieces.length === 0 || i !== currentPlayer) ? 'not-allowed' : 'pointer';
+        }
+      }
+    }
+    
+    // Обработчик изменения режима игры
+    function onGameModeChange() {
+      const modeSelect = document.getElementById('gameMode');
+      if (modeSelect) {
+        gameMode = modeSelect.value;
+        resetGame();
       }
     }
     
@@ -1364,10 +1601,18 @@
       // Убеждаемся, что лог скрыт при загрузке
       document.getElementById('logPanel').style.display = 'none';
       
-      // Обработчик кнопки базара
-      const bazaarBtn = document.getElementById('bazaarBtn');
-      if (bazaarBtn) {
-        bazaarBtn.addEventListener('click', takeFromBazaar);
+      // Обработчик переключения режима игры
+      const modeSelect = document.getElementById('gameMode');
+      if (modeSelect) {
+        modeSelect.addEventListener('change', onGameModeChange);
+      }
+      
+      // Обработчики кнопок базара для обоих игроков
+      for (let i = 0; i < 2; i++) {
+        const bazaarBtn = document.getElementById(`bazaarBtn${i}`);
+        if (bazaarBtn) {
+          bazaarBtn.addEventListener('click', () => takeFromBazaar(i));
+        }
       }
       
       resetGame();
