@@ -1,0 +1,1145 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Гексагональное Домино</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      padding: 20px;
+    }
+    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .title {
+      font-size: 28px;
+      font-weight: bold;
+      color: #1e293b;
+    }
+    
+    .score {
+      font-size: 32px;
+      font-weight: bold;
+      color: #3b82f6;
+    }
+    
+    .game-area {
+      display: flex;
+      gap: 20px;
+    }
+    
+    .board-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .board {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      height: 600px;
+    }
+    
+    .log-panel {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      height: 400px;
+      overflow-y: auto;
+    }
+    
+    .log-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #1e293b;
+    }
+    
+    .log-content {
+      font-family: monospace;
+      font-size: 12px;
+      color: #475569;
+      white-space: normal;
+    }
+    
+    .sidebar {
+      width: 300px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .panel {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .panel-title {
+      font-weight: bold;
+      margin-bottom: 15px;
+      color: #1e293b;
+    }
+    
+    .available-pieces {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    
+    .piece-card {
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .piece-card:hover {
+      border-color: #94a3b8;
+    }
+    
+    .piece-card.selected {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+    
+    .rotate-btn {
+      padding: 8px 12px;
+      background: #f1f5f9;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 20px;
+      transition: all 0.2s;
+    }
+    
+    .rotate-btn:hover {
+      background: #e2e8f0;
+    }
+    
+    .reset-btn {
+      padding: 10px 20px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+    
+    .reset-btn:hover {
+      background: #2563eb;
+    }
+    
+    .instructions {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+    
+    .instructions li {
+      margin-bottom: 5px;
+    }
+    
+    svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <div class="title">Гексагональное Домино</div>
+        <div style="font-size: 14px; color: #64748b;">Соединяйте доминошки цвет к цвету</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 20px;">
+        <div>
+          <div style="font-size: 14px; color: #64748b;">Счёт</div>
+          <div class="score" id="score">0</div>
+        </div>
+        <button class="reset-btn" onclick="resetGame()">🔄 Сброс</button>
+      </div>
+    </div>
+    
+    <div class="game-area">
+      <div class="board-container">
+        <div class="board">
+          <svg id="gameBoard" viewBox="0 0 1000 600"></svg>
+        </div>
+        
+        <div class="log-panel">
+          <div class="log-title">Лог</div>
+          <div class="log-content" id="logContent">Лог пуст</div>
+        </div>
+      </div>
+      
+      <div class="sidebar">
+        <div class="panel">
+          <div class="panel-title">Доступные доминошки</div>
+          <div class="available-pieces" id="availablePieces"></div>
+        </div>
+        
+        <div class="panel">
+          <div class="panel-title">Как играть</div>
+          <ul class="instructions">
+            <li>• Выберите доминошку</li>
+            <li>• Поверните её кнопкой поворота</li>
+            <li>• Щёлкните на свободное место</li>
+            <li>• Цвета должны совпадать!</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Константы
+    const COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308', '#a855f7', '#ec4899'];
+    const COLOR_NAMES = {
+      '#ef4444': 'красный',
+      '#3b82f6': 'синий',
+      '#22c55e': 'зелёный',
+      '#eab308': 'жёлтый',
+      '#a855f7': 'фиолетовый',
+      '#ec4899': 'розовый'
+    };
+    const HEX_SIZE = 40;
+    
+    // Состояние игры
+    let placedPieces = [];
+    let availablePieces = [];
+    let selectedPiece = null;
+    let score = 0;
+    let logMessages = [];
+    
+    // Утилиты для hex координат
+    function hexToPixel(q, r) {
+      const x = HEX_SIZE * (3 / 2 * q);
+      const y = HEX_SIZE * Math.sqrt(3) * (r + q / 2);
+      return { x, y };
+    }
+    
+    function hexEquals(a, b) {
+      return a.q === b.q && a.r === b.r && a.s === b.s;
+    }
+    
+    function getHexNeighbors(hex) {
+      const directions = [
+        { q: 1, r: 0, s: -1 },
+        { q: 1, r: -1, s: 0 },
+        { q: 0, r: -1, s: 1 },
+        { q: -1, r: 0, s: 1 },
+        { q: -1, r: 1, s: 0 },
+        { q: 0, r: 1, s: -1 }
+      ];
+      return directions.map(d => ({
+        q: hex.q + d.q,
+        r: hex.r + d.r,
+        s: hex.s + d.s
+      }));
+    }
+    
+    // Преобразует направление соседа (индекс из getHexNeighbors) в сторону шестиугольника
+    // Использует реальные координаты пикселей для определения угла
+    function directionToSide(fromCoord, toCoord) {
+      const fromPixel = hexToPixel(fromCoord.q, fromCoord.r);
+      const toPixel = hexToPixel(toCoord.q, toCoord.r);
+      const angle = Math.atan2(toPixel.y - fromPixel.y, toPixel.x - fromPixel.x);
+      let a = angle;
+      if (a < 0) a += Math.PI * 2;
+      // Вычисляем индекс вершины (ближайшая вершина по направлению)
+      const vertexIndex = Math.round(a / (Math.PI / 3)) % 6;
+      // Сторона находится между вершиной (vertexIndex - 1 + 6) % 6 и vertexIndex
+      // Но getEdgeMidpoint использует: side находится между вершинами ((side+5)%6) и side
+      // Значит, если ближайшая вершина vertexIndex, то сторона перед ней (по часовой стрелке) = vertexIndex
+      // Но нужно учесть, что стороны нумеруются так: сторона 0 между вершиной 5 и 0
+      // Если ближайшая вершина 0, то сторона перед ней (по часовой стрелке) = 0
+      // Если ближайшая вершина 1, то сторона перед ней = 1
+      // Значит, side = vertexIndex
+      return vertexIndex;
+    }
+    
+    function getHexPoints(size) {
+      const points = [];
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i;
+        const x = size * Math.cos(angle);
+        const y = size * Math.sin(angle);
+        points.push(`${x},${y}`);
+      }
+      return points.join(' ');
+    }
+    
+    function getEdgeMidpoint(side, size) {
+      const angle1 = (Math.PI / 3) * ((side + 5) % 6);
+      const angle2 = (Math.PI / 3) * side;
+      const x1 = size * Math.cos(angle1);
+      const y1 = size * Math.sin(angle1);
+      const x2 = size * Math.cos(angle2);
+      const y2 = size * Math.sin(angle2);
+      return {
+        x: (x1 + x2) / 2,
+        y: (y1 + y2) / 2
+      };
+    }
+    
+    
+    // Функция определения цвета на стороне
+    // side - это фиксированная позиция на доске (0-5), относительно которой находится сосед
+    // 
+    // ЛОГИКА ПОВОРОТА (по часовой стрелке, как в SVG):
+    // - При rotation=0: сторона 0 доминошки находится на позиции 0
+    // - При повороте по часовой на rotation: сторона originalSide перемещается на позицию (originalSide + rotation) % 6
+    // - Обратно: на позиции side находится сторона доминошки (side - rotation + 6) % 6
+    function getColorAtSide(piece, side) {
+      // На позиции side (фиксированная позиция на доске) находится сторона доминошки (side - rotation + 6) % 6
+      const pieceSide = (side - piece.rotation + 6) % 6;
+      // Стороны доминошки 0,1,2 = topColor, стороны 3,4,5 = bottomColor
+      const isTopHalf = (pieceSide === 0 || pieceSide === 1 || pieceSide === 2);
+      return isTopHalf ? piece.topColor : piece.bottomColor;
+    }
+    
+    function generateRandomPiece(id) {
+      return {
+        id,
+        topColor: COLORS[Math.floor(Math.random() * COLORS.length)],
+        bottomColor: COLORS[Math.floor(Math.random() * COLORS.length)],
+        rotation: 0
+      };
+    }
+    
+    function addLogMessage(message, isHTML = false) {
+      logMessages.push({ text: message, html: isHTML });
+      updateLogDisplay();
+    }
+    
+    function updateLogDisplay() {
+      const logContent = document.getElementById('logContent');
+      logContent.innerHTML = '';
+      logMessages.forEach(msg => {
+        if (msg.element) {
+          // Если есть готовый элемент (например, с визуализацией)
+          logContent.appendChild(msg.element);
+        } else {
+          // Обычный текст или HTML
+          const div = document.createElement('div');
+          div.style.marginBottom = '8px';
+          div.style.padding = '4px';
+          if (msg.html) {
+            div.innerHTML = msg.text;
+          } else {
+            div.textContent = msg.text;
+          }
+          logContent.appendChild(div);
+        }
+      });
+      logContent.scrollTop = logContent.scrollHeight;
+    }
+    
+    function createRotationVisualization(piece, rotation, pieceSideColors, boardPositionColors) {
+      const radius = 20;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('width', '400');
+      svg.setAttribute('height', '120');
+      svg.setAttribute('viewBox', '0 0 400 120');
+      svg.style.margin = '2px 0';
+      svg.style.border = '1px solid rgba(255,255,255,0.3)';
+      svg.style.borderRadius = '4px';
+      svg.style.backgroundColor = 'rgba(0,0,0,0.4)';
+      
+      // Функция для создания сегмента (сектора) шестиугольника
+      // Используем ту же нумерацию, что и в getEdgeMidpoint:
+      // сторона side находится между вершинами ((side+5)%6) и side
+      // Для side=0: между вершиной 5 (угол 300°) и вершиной 0 (угол 0°) = справа
+      function createHexSegment(centerX, centerY, sideIndex, color, radius, strokeColor, startAngle = 0) {
+        const segment = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        // В getEdgeMidpoint: angle1 = (Math.PI/3) * ((side+5)%6), angle2 = (Math.PI/3) * side
+        const angle1 = (Math.PI / 3) * ((sideIndex + 5) % 6) + startAngle;
+        const angle2 = (Math.PI / 3) * sideIndex + startAngle;
+        
+        const x1 = centerX + radius * 0.3 * Math.cos(angle1);
+        const y1 = centerY + radius * 0.3 * Math.sin(angle1);
+        const x2 = centerX + radius * Math.cos(angle1);
+        const y2 = centerY + radius * Math.sin(angle1);
+        const x3 = centerX + radius * Math.cos(angle2);
+        const y3 = centerY + radius * Math.sin(angle2);
+        const x4 = centerX + radius * 0.3 * Math.cos(angle2);
+        const y4 = centerY + radius * 0.3 * Math.sin(angle2);
+        
+        const d = `M ${centerX} ${centerY} L ${x1} ${y1} L ${x2} ${y2} L ${x3} ${y3} L ${x4} ${y4} Z`;
+        segment.setAttribute('d', d);
+        segment.setAttribute('fill', color);
+        segment.setAttribute('stroke', strokeColor);
+        segment.setAttribute('stroke-width', '2');
+        return segment;
+      }
+      
+      // Левая часть: доминошка с её сторонами (с поворотом, как в превью)
+      const pieceGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      pieceGroup.setAttribute('transform', 'translate(50, 60)');
+      
+      // Применяем поворот к доминошке (как в превью: rotate(rotation * 60))
+      const rotatedPieceGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      rotatedPieceGroup.setAttribute('transform', `rotate(${rotation * 60})`);
+      
+      // Рисуем 6 секторов доминошки с цветами
+      // В превью вершины начинаются с угла 0 (направление вправо), не с -π/2
+      // Поэтому нужно скорректировать нумерацию: сторона 0 должна быть справа при rotation=0
+      for (let i = 0; i < 6; i++) {
+        // Используем ту же нумерацию, что и в превью (вершина 0 справа)
+        const segment = createHexSegment(0, 0, i, pieceSideColors[i], radius, '#fff');
+        rotatedPieceGroup.appendChild(segment);
+        
+        // Номер стороны в центре сектора
+        // Сторона i находится между вершинами ((i+5)%6) и i
+        // Центр стороны: среднее между angle1 и angle2
+        const angle1 = (Math.PI / 3) * ((i + 5) % 6);
+        const angle2 = (Math.PI / 3) * i;
+        // Вычисляем средний угол с учётом того, что углы могут переходить через 0
+        let avgAngle = (angle1 + angle2) / 2;
+        if (Math.abs(angle1 - angle2) > Math.PI) {
+          avgAngle = (angle1 + angle2 + 2 * Math.PI) / 2;
+          if (avgAngle > Math.PI) avgAngle -= 2 * Math.PI;
+        }
+        const angle = avgAngle;
+        const textX = radius * 0.65 * Math.cos(angle);
+        const textY = radius * 0.65 * Math.sin(angle);
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', textX);
+        text.setAttribute('y', textY);
+        text.setAttribute('font-size', '14');
+        text.setAttribute('fill', '#fff');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'middle');
+        text.setAttribute('font-weight', 'bold');
+        text.setAttribute('stroke', '#000');
+        text.setAttribute('stroke-width', '0.3');
+        text.textContent = `${i}`;
+        // Номера НЕ поворачиваются вместе с доминошкой (как в превью)
+        // Вычисляем позицию номера после поворота доминошки
+        const rotationRad = (rotation * 60 * Math.PI) / 180;
+        const rotatedTextX = textX * Math.cos(rotationRad) - textY * Math.sin(rotationRad);
+        const rotatedTextY = textX * Math.sin(rotationRad) + textY * Math.cos(rotationRad);
+        text.setAttribute('x', rotatedTextX);
+        text.setAttribute('y', rotatedTextY);
+        text.setAttribute('font-size', '10');
+        pieceGroup.appendChild(text); // Добавляем в pieceGroup, не в rotatedPieceGroup
+      }
+      
+      pieceGroup.appendChild(rotatedPieceGroup);
+      svg.appendChild(pieceGroup);
+      
+      // Маркер стрелки
+      const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+      const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+      marker.setAttribute('id', 'arrowhead');
+      marker.setAttribute('markerWidth', '10');
+      marker.setAttribute('markerHeight', '10');
+      marker.setAttribute('refX', '9');
+      marker.setAttribute('refY', '3');
+      marker.setAttribute('orient', 'auto');
+      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      poly.setAttribute('points', '0 0, 10 3, 0 6');
+      poly.setAttribute('fill', '#ffd700');
+      marker.appendChild(poly);
+      defs.appendChild(marker);
+      svg.insertBefore(defs, svg.firstChild);
+      
+      // Стрелка поворота (добавляем после всех линий)
+      const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arrow.setAttribute('d', 'M 130 60 L 220 60');
+      arrow.setAttribute('stroke', '#ffd700');
+      arrow.setAttribute('stroke-width', '2');
+      arrow.setAttribute('fill', 'none');
+      arrow.setAttribute('marker-end', 'url(#arrowhead)');
+      svg.appendChild(arrow);
+      
+      // Текст поворота
+      const rotationText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      rotationText.setAttribute('x', '175');
+      rotationText.setAttribute('y', '55');
+      rotationText.setAttribute('font-size', '12');
+      rotationText.setAttribute('fill', '#ffd700');
+      rotationText.setAttribute('text-anchor', 'middle');
+      rotationText.setAttribute('font-weight', 'bold');
+      rotationText.textContent = `Поворот ${rotation}`;
+      svg.appendChild(rotationText);
+      
+      // Правая часть: позиции доски с цветами (меняются, но не поворачиваются)
+      const boardGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      boardGroup.setAttribute('transform', 'translate(270, 60)');
+      
+      // Рисуем 6 секторов доски с цветами (позиции доски не поворачиваются, всегда 0 вверху)
+      for (let i = 0; i < 6; i++) {
+        // Позиции доски используют ту же нумерацию, что и стороны
+        const segment = createHexSegment(0, 0, i, boardPositionColors[i], radius, '#888');
+        boardGroup.appendChild(segment);
+        
+        // Номер позиции в центре сектора (та же логика, что и для сторон)
+        const angle1 = (Math.PI / 3) * ((i + 5) % 6);
+        const angle2 = (Math.PI / 3) * i;
+        let avgAngle = (angle1 + angle2) / 2;
+        if (Math.abs(angle1 - angle2) > Math.PI) {
+          avgAngle = (angle1 + angle2 + 2 * Math.PI) / 2;
+          if (avgAngle > Math.PI) avgAngle -= 2 * Math.PI;
+        }
+        const angle = avgAngle;
+        const textX = radius * 0.65 * Math.cos(angle);
+        const textY = radius * 0.65 * Math.sin(angle);
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', textX);
+        text.setAttribute('y', textY);
+        text.setAttribute('font-size', '10');
+        text.setAttribute('fill', '#888');
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('dominant-baseline', 'middle');
+        text.setAttribute('font-weight', 'bold');
+        text.textContent = `${i}`;
+        boardGroup.appendChild(text);
+        
+        // Стрелка от стороны доминошки к позиции доски
+        // Формула из getColorAtSide: pieceSide = (side - rotation + 6) % 6
+        // Значит, на позиции i доски находится сторона (i - rotation + 6) % 6 доминошки
+        const pieceSideIndex = (i - rotation + 6) % 6;
+        // Вычисляем центр стороны доминошки (как в getEdgeMidpoint)
+        const pieceAngle1Unrotated = (Math.PI / 3) * ((pieceSideIndex + 5) % 6);
+        const pieceAngle2Unrotated = (Math.PI / 3) * pieceSideIndex;
+        let pieceAvgAngleUnrotated = (pieceAngle1Unrotated + pieceAngle2Unrotated) / 2;
+        if (Math.abs(pieceAngle1Unrotated - pieceAngle2Unrotated) > Math.PI) {
+          pieceAvgAngleUnrotated = (pieceAngle1Unrotated + pieceAngle2Unrotated + 2 * Math.PI) / 2;
+          if (pieceAvgAngleUnrotated > Math.PI) pieceAvgAngleUnrotated -= 2 * Math.PI;
+        }
+        // Применяем поворот доминошки
+        const pieceRotationRad = (rotation * 60 * Math.PI) / 180;
+        const pieceAngle = pieceAvgAngleUnrotated + pieceRotationRad;
+        // Центр позиции на доске (не поворачивается)
+        const boardAngle1 = (Math.PI / 3) * ((i + 5) % 6);
+        const boardAngle2 = (Math.PI / 3) * i;
+        let boardAvgAngle = (boardAngle1 + boardAngle2) / 2;
+        if (Math.abs(boardAngle1 - boardAngle2) > Math.PI) {
+          boardAvgAngle = (boardAngle1 + boardAngle2 + 2 * Math.PI) / 2;
+          if (boardAvgAngle > Math.PI) boardAvgAngle -= 2 * Math.PI;
+        }
+        const boardAngle = boardAvgAngle;
+        
+        const pieceX = 50 + radius * 0.7 * Math.cos(pieceAngle);
+        const pieceY = 60 + radius * 0.7 * Math.sin(pieceAngle);
+        const boardX = 270 + radius * 0.7 * Math.cos(boardAngle);
+        const boardY = 60 + radius * 0.7 * Math.sin(boardAngle);
+        
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', pieceX);
+        line.setAttribute('y1', pieceY);
+        line.setAttribute('x2', boardX);
+        line.setAttribute('y2', boardY);
+        line.setAttribute('stroke', `rgba(255,215,0,0.4)`);
+        line.setAttribute('stroke-width', '1');
+        line.setAttribute('stroke-dasharray', '2,2');
+        svg.insertBefore(line, arrow);
+      }
+      
+      svg.appendChild(boardGroup);
+      
+      // Подписи (упрощённые)
+      const label1 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label1.setAttribute('x', '50');
+      label1.setAttribute('y', '25');
+      label1.setAttribute('font-size', '10');
+      label1.setAttribute('fill', '#fff');
+      label1.setAttribute('text-anchor', 'middle');
+      label1.textContent = 'Доминошка';
+      svg.appendChild(label1);
+      
+      const label2 = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label2.setAttribute('x', '270');
+      label2.setAttribute('y', '25');
+      label2.setAttribute('font-size', '10');
+      label2.setAttribute('fill', '#888');
+      label2.setAttribute('text-anchor', 'middle');
+      label2.textContent = 'На доске';
+      svg.appendChild(label2);
+      
+      return svg;
+    }
+    
+    function getAvailablePositions() {
+      const positions = new Set();
+      placedPieces.forEach(placed => {
+        const neighbors = getHexNeighbors(placed.coord);
+        neighbors.forEach(neighbor => {
+          const isOccupied = placedPieces.some(p => hexEquals(p.coord, neighbor));
+          if (!isOccupied) {
+            positions.add(`${neighbor.q},${neighbor.r},${neighbor.s}`);
+          }
+        });
+      });
+      return Array.from(positions).map(pos => {
+        const [q, r, s] = pos.split(',').map(Number);
+        return { q, r, s };
+      });
+    }
+    
+    function canPlacePiece(piece, coord) {
+      const availablePositions = getAvailablePositions();
+      const isAvailable = availablePositions.some(pos => hexEquals(pos, coord));
+      if (!isAvailable) return false;
+      
+      const neighbors = getHexNeighbors(coord);
+      let hasNeighbor = false;
+      
+      for (let i = 0; i < neighbors.length; i++) {
+        const neighbor = neighbors[i];
+        const placedNeighbor = placedPieces.find(p => hexEquals(p.coord, neighbor));
+        
+        if (placedNeighbor) {
+          hasNeighbor = true;
+          // Используем реальные координаты для определения сторон
+          // Сторона новой доминошки, смотрящая на установленную
+          const newPieceSide = directionToSide(coord, neighbor);
+          // Сторона установленной доминошки, смотрящая на новую
+          const placedSide = directionToSide(neighbor, coord);
+          
+          const newPieceColor = getColorAtSide(piece, newPieceSide);
+          const placedColor = getColorAtSide(placedNeighbor.piece, placedSide);
+          
+          if (newPieceColor !== placedColor) {
+            return false;
+          }
+        }
+      }
+      
+      return hasNeighbor;
+    }
+    
+    function renderBoard() {
+      const svg = document.getElementById('gameBoard');
+      svg.innerHTML = '';
+      
+      const centerX = 500;
+      const centerY = 300;
+      
+      const availablePositions = getAvailablePositions();
+      
+      // Рисуем доступные позиции
+      availablePositions.forEach(coord => {
+        const { x, y } = hexToPixel(coord.q, coord.r);
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('transform', `translate(${centerX + x}, ${centerY + y})`);
+        
+        const canPlace = selectedPiece ? canPlacePiece(selectedPiece, coord) : false;
+        
+        const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        polygon.setAttribute('points', getHexPoints(HEX_SIZE - 2));
+        polygon.setAttribute('fill', '#f8fafc');
+        polygon.setAttribute('stroke', '#cbd5e1');
+        polygon.setAttribute('stroke-width', '2');
+        polygon.setAttribute('stroke-dasharray', '4,4');
+        polygon.style.cursor = canPlace ? 'pointer' : 'not-allowed';
+        
+        if (canPlace) {
+          polygon.addEventListener('click', () => placePiece(coord));
+          polygon.addEventListener('mouseenter', () => {
+            polygon.setAttribute('fill', '#dbeafe');
+            polygon.setAttribute('stroke', '#3b82f6');
+          });
+          polygon.addEventListener('mouseleave', () => {
+            polygon.setAttribute('fill', '#f8fafc');
+            polygon.setAttribute('stroke', '#cbd5e1');
+          });
+        }
+        
+        g.appendChild(polygon);
+        svg.appendChild(g);
+        
+        // Если это валидная позиция и выбрана доминошка, рисуем превью
+        // Превью показывает цвета на фиксированных позициях доски (не поворачивается, как в правой части визуализации лога)
+        if (canPlace && selectedPiece) {
+          const previewGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          previewGroup.setAttribute('transform', `translate(${centerX + x}, ${centerY + y})`);
+          
+          // Используем ту же функцию createHexSegment, что и в визуализации лога
+          // для консистентности отображения
+          function createPreviewSegment(centerX, centerY, sideIndex, color, radius, strokeColor) {
+            const segment = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const angle1 = (Math.PI / 3) * ((sideIndex + 5) % 6);
+            const angle2 = (Math.PI / 3) * sideIndex;
+            
+            const x1 = centerX + radius * 0.3 * Math.cos(angle1);
+            const y1 = centerY + radius * 0.3 * Math.sin(angle1);
+            const x2 = centerX + radius * Math.cos(angle1);
+            const y2 = centerY + radius * Math.sin(angle1);
+            const x3 = centerX + radius * Math.cos(angle2);
+            const y3 = centerY + radius * Math.sin(angle2);
+            const x4 = centerX + radius * 0.3 * Math.cos(angle2);
+            const y4 = centerY + radius * 0.3 * Math.sin(angle2);
+            
+            const d = `M ${centerX} ${centerY} L ${x1} ${y1} L ${x2} ${y2} L ${x3} ${y3} L ${x4} ${y4} Z`;
+            segment.setAttribute('d', d);
+            segment.setAttribute('fill', color);
+            segment.setAttribute('stroke', strokeColor);
+            segment.setAttribute('stroke-width', '1');
+            segment.setAttribute('opacity', '0.8');
+            return segment;
+          }
+          
+          // Рисуем 6 секторов с цветами, которые будут видны на позициях доски
+          // Используем getColorAtSide, чтобы получить цвет на каждой позиции
+          for (let side = 0; side < 6; side++) {
+            const color = getColorAtSide(selectedPiece, side);
+            const segment = createPreviewSegment(0, 0, side, color, HEX_SIZE, '#1e293b');
+            previewGroup.appendChild(segment);
+          }
+          
+          // Контур
+          const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+          outline.setAttribute('points', getHexPoints(HEX_SIZE - 1));
+          outline.setAttribute('fill', 'none');
+          outline.setAttribute('stroke', '#3b82f6');
+          outline.setAttribute('stroke-width', '3');
+          outline.setAttribute('opacity', '0.9');
+          previewGroup.appendChild(outline);
+          
+          svg.appendChild(previewGroup);
+        }
+      });
+      
+      // Рисуем размещённые доминошки
+      placedPieces.forEach(placed => {
+        const { x, y } = hexToPixel(placed.coord.q, placed.coord.r);
+        const rotation = placed.piece.rotation * 60;
+        
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('transform', `translate(${centerX + x}, ${centerY + y})`);
+        
+        const rotatedG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        rotatedG.setAttribute('transform', `rotate(${rotation})`);
+        
+        // Вершины
+        const vertices = [];
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i;
+          vertices.push({
+            x: HEX_SIZE * Math.cos(angle),
+            y: HEX_SIZE * Math.sin(angle)
+          });
+        }
+        
+        // Правая половина (topColor): вершины 5,0,1,2
+        const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path1.setAttribute('d', `M 0,0 L ${vertices[5].x},${vertices[5].y} L ${vertices[0].x},${vertices[0].y} L ${vertices[1].x},${vertices[1].y} L ${vertices[2].x},${vertices[2].y} Z`);
+        path1.setAttribute('fill', placed.piece.topColor);
+        path1.setAttribute('stroke', '#1e293b');
+        path1.setAttribute('stroke-width', '1');
+        rotatedG.appendChild(path1);
+        
+        // Левая половина (bottomColor): вершины 2,3,4,5
+        const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path2.setAttribute('d', `M 0,0 L ${vertices[2].x},${vertices[2].y} L ${vertices[3].x},${vertices[3].y} L ${vertices[4].x},${vertices[4].y} L ${vertices[5].x},${vertices[5].y} Z`);
+        path2.setAttribute('fill', placed.piece.bottomColor);
+        path2.setAttribute('stroke', '#1e293b');
+        path2.setAttribute('stroke-width', '1');
+        rotatedG.appendChild(path2);
+        
+        // Контур
+        const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        outline.setAttribute('points', getHexPoints(HEX_SIZE - 1));
+        outline.setAttribute('fill', 'none');
+        outline.setAttribute('stroke', '#1e293b');
+        outline.setAttribute('stroke-width', '3');
+        rotatedG.appendChild(outline);
+        
+        g.appendChild(rotatedG);
+        
+        // Номера сторон (НЕ вращаются)
+        for (let side = 0; side < 6; side++) {
+          const midpoint = getEdgeMidpoint(side, HEX_SIZE - 5);
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('x', midpoint.x);
+          text.setAttribute('y', midpoint.y);
+          text.setAttribute('font-size', '14');
+          text.setAttribute('fill', '#ffffff');
+          text.setAttribute('stroke', '#000000');
+          text.setAttribute('stroke-width', '0.8');
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('dominant-baseline', 'middle');
+          text.setAttribute('font-weight', 'bold');
+          text.textContent = side;
+          g.appendChild(text);
+        }
+        
+        svg.appendChild(g);
+      });
+    }
+    
+    function renderAvailablePieces() {
+      const container = document.getElementById('availablePieces');
+      container.innerHTML = '';
+      
+      availablePieces.forEach(piece => {
+        const card = document.createElement('div');
+        card.className = 'piece-card';
+        if (selectedPiece && selectedPiece.id === piece.id) {
+          card.classList.add('selected');
+        }
+        
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', '80');
+        svg.setAttribute('height', '80');
+        svg.setAttribute('viewBox', '-50 -50 100 100');
+        
+        const rotation = piece.rotation * 60;
+        const rotationRad = (rotation * Math.PI) / 180;
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('transform', `rotate(${rotation})`);
+        
+        const vertices = [];
+        for (let i = 0; i < 6; i++) {
+          const angle = (Math.PI / 3) * i;
+          vertices.push({
+            x: HEX_SIZE * Math.cos(angle),
+            y: HEX_SIZE * Math.sin(angle)
+          });
+        }
+        
+        const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path1.setAttribute('d', `M 0,0 L ${vertices[5].x},${vertices[5].y} L ${vertices[0].x},${vertices[0].y} L ${vertices[1].x},${vertices[1].y} L ${vertices[2].x},${vertices[2].y} Z`);
+        path1.setAttribute('fill', piece.topColor);
+        path1.setAttribute('stroke', '#1e293b');
+        path1.setAttribute('stroke-width', '1');
+        g.appendChild(path1);
+        
+        const path2 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path2.setAttribute('d', `M 0,0 L ${vertices[2].x},${vertices[2].y} L ${vertices[3].x},${vertices[3].y} L ${vertices[4].x},${vertices[4].y} L ${vertices[5].x},${vertices[5].y} Z`);
+        path2.setAttribute('fill', piece.bottomColor);
+        path2.setAttribute('stroke', '#1e293b');
+        path2.setAttribute('stroke-width', '1');
+        g.appendChild(path2);
+        
+        const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        outline.setAttribute('points', getHexPoints(HEX_SIZE - 1));
+        outline.setAttribute('fill', 'none');
+        outline.setAttribute('stroke', '#1e293b');
+        outline.setAttribute('stroke-width', '3');
+        g.appendChild(outline);
+        
+        svg.appendChild(g);
+        
+        // Номера сторон (НЕ поворачиваются вместе с доминошкой)
+        for (let side = 0; side < 6; side++) {
+          const midpoint = getEdgeMidpoint(side, HEX_SIZE - 5);
+          // Применяем поворот к координатам, чтобы разместить текст в правильной позиции
+          const rotatedX = midpoint.x * Math.cos(rotationRad) - midpoint.y * Math.sin(rotationRad);
+          const rotatedY = midpoint.x * Math.sin(rotationRad) + midpoint.y * Math.cos(rotationRad);
+          
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('x', rotatedX);
+          text.setAttribute('y', rotatedY);
+          text.setAttribute('font-size', '14');
+          text.setAttribute('fill', '#ffffff');
+          text.setAttribute('stroke', '#000000');
+          text.setAttribute('stroke-width', '0.8');
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('dominant-baseline', 'middle');
+          text.setAttribute('font-weight', 'bold');
+          text.textContent = side;
+          svg.appendChild(text);
+        }
+        
+        const rotateBtn = document.createElement('button');
+        rotateBtn.className = 'rotate-btn';
+        rotateBtn.textContent = '↻';
+        rotateBtn.onclick = (e) => {
+          e.stopPropagation();
+          piece.rotation = (piece.rotation + 1) % 6;
+          if (selectedPiece && selectedPiece.id === piece.id) {
+            selectedPiece.rotation = piece.rotation;
+          }
+          renderAvailablePieces();
+        };
+        
+        card.onclick = () => {
+          selectedPiece = piece;
+          analyzePieceRotations(piece);
+          renderAvailablePieces();
+          renderBoard();
+        };
+        
+        card.appendChild(svg);
+        card.appendChild(rotateBtn);
+        container.appendChild(card);
+      });
+    }
+    
+    function analyzePieceRotations(piece) {
+      // Всегда показываем доминошку с rotation = 0 для корректного отображения
+      const basePiece = { ...piece, rotation: 0 };
+      
+      const sideColors = [];
+      for (let i = 0; i < 6; i++) {
+        const color = getColorAtSide(basePiece, i);
+        sideColors.push(`${i} - ${COLOR_NAMES[color]}`);
+      }
+      addLogMessage(`Доступная доминошка: ${sideColors.join(', ')}`);
+      
+      // Цвета сторон доминошки при rotation = 0 (не меняются при повороте)
+      const pieceSideColorsAtRotation0 = [];
+      for (let i = 0; i < 6; i++) {
+        const isTopHalf = (i === 0 || i === 1 || i === 2);
+        pieceSideColorsAtRotation0[i] = isTopHalf ? basePiece.topColor : basePiece.bottomColor;
+      }
+      
+      // Храним наборы соединений для каждого поворота (для проверки дубликатов)
+      const connectionsByRotation = [];
+      
+      for (let rotation = 0; rotation < 6; rotation++) {
+        const rotatedPiece = { ...basePiece, rotation };
+        const validConnections = [];
+        const connectionSet = new Set(); // Набор пар (placedSide-newPieceSide) для проверки
+        
+        // Цвета сторон доминошки (не меняются при повороте - это физические стороны доминошки)
+        const pieceSideColors = [];
+        for (let i = 0; i < 6; i++) {
+          const isTopHalf = (i === 0 || i === 1 || i === 2);
+          pieceSideColors.push(isTopHalf ? rotatedPiece.topColor : rotatedPiece.bottomColor);
+        }
+        
+        // Цвета на позициях доски (меняются при повороте - это что видно на доске)
+        const boardPositionColors = [];
+        for (let i = 0; i < 6; i++) {
+          boardPositionColors[i] = getColorAtSide(rotatedPiece, i);
+        }
+        
+        // Вычисляем валидные соединения для этого поворота
+        // Логика должна совпадать с canPlacePiece
+        const availablePositions = getAvailablePositions();
+        availablePositions.forEach(newCoord => {
+          const neighbors = getHexNeighbors(newCoord);
+          
+          // Проверяем, есть ли среди соседей установленная доминошка
+          for (let i = 0; i < neighbors.length; i++) {
+            const neighbor = neighbors[i];
+            const placed = placedPieces.find(p => hexEquals(p.coord, neighbor));
+            
+            if (placed) {
+              // Используем реальные координаты для определения сторон
+              // Сторона новой доминошки, смотрящая на установленную
+              const newPieceSide = directionToSide(newCoord, placed.coord);
+              // Сторона установленной доминошки, смотрящая на новую
+              const placedSide = directionToSide(placed.coord, newCoord);
+              
+              const newPieceColor = getColorAtSide(rotatedPiece, newPieceSide);
+              const placedColor = getColorAtSide(placed.piece, placedSide);
+              
+              if (newPieceColor === placedColor) {
+                const connectionKey = `${newPieceSide}-${placedSide}`;
+                connectionSet.add(connectionKey);
+                validConnections.push(`установленная сектор ${placedSide} (${COLOR_NAMES[placedColor]}) = доступная сектор ${newPieceSide} (${COLOR_NAMES[newPieceColor]})`);
+              }
+            }
+          }
+        });
+        
+        // Создаём визуализацию поворота
+        const visualization = createRotationVisualization(rotatedPiece, rotation, pieceSideColors, boardPositionColors);
+        const visDiv = document.createElement('div');
+        visDiv.appendChild(visualization);
+        
+        // Сохраняем и визуализацию, и радиокнопку
+        const combinedDiv = document.createElement('div');
+        combinedDiv.style.marginBottom = '4px';
+        combinedDiv.style.padding = '4px';
+        combinedDiv.style.backgroundColor = 'rgba(0,0,0,0.2)';
+        combinedDiv.style.borderRadius = '4px';
+        combinedDiv.style.display = 'flex';
+        combinedDiv.style.alignItems = 'center';
+        combinedDiv.style.gap = '8px';
+        
+        // Радиокнопка для выбора поворота
+        const radio = document.createElement('input');
+        radio.type = 'radio';
+        radio.name = `pieceRotation-${piece.id}`;
+        radio.value = rotation;
+        radio.id = `rotation-${piece.id}-${rotation}`;
+        radio.style.cursor = 'pointer';
+        // Отмечаем текущий поворот выбранной доминошки
+        if (selectedPiece && selectedPiece.id === piece.id && selectedPiece.rotation === rotation) {
+          radio.checked = true;
+        }
+        radio.onchange = () => {
+          if (selectedPiece && selectedPiece.id === piece.id) {
+            selectedPiece.rotation = rotation;
+            piece.rotation = rotation;
+            renderBoard();
+            renderAvailablePieces();
+          }
+        };
+        combinedDiv.appendChild(radio);
+        
+        combinedDiv.appendChild(visDiv);
+        
+        // Краткая информация о валидных соединениях
+        const infoDiv = document.createElement('div');
+        infoDiv.style.fontSize = '10px';
+        infoDiv.style.color = '#fff';
+        infoDiv.style.flex = '1';
+        if (validConnections.length > 0) {
+          infoDiv.textContent = `✓ ${validConnections.length} соединений`;
+          infoDiv.style.color = '#22c55e';
+        } else {
+          infoDiv.textContent = 'Нет соединений';
+          infoDiv.style.color = '#888';
+        }
+        combinedDiv.appendChild(infoDiv);
+        
+        logMessages.push({ text: '', html: true, element: combinedDiv });
+        updateLogDisplay();
+        
+        // Проверка: цвета сторон доминошки не должны меняться при повороте
+        let hasError = false;
+        for (let pieceSide = 0; pieceSide < 6; pieceSide++) {
+          const expectedColor = pieceSideColorsAtRotation0[pieceSide];
+          const actualColor = pieceSideColors[pieceSide];
+          if (expectedColor !== actualColor) {
+            hasError = true;
+            console.error(`ОШИБКА: сторона доминошки ${pieceSide} изменила цвет при повороте!`);
+          }
+        }
+        if (hasError) {
+          addLogMessage(`  ⚠️ ПОВОРОТ ${rotation}: ОШИБКА - цвета сторон доминошки изменились!`);
+        }
+        
+        // Проверка: на позиции side доски должен быть цвет стороны доминошки (side + rotation) % 6
+        // При повороте против часовой: сторона pieceSide оказывается на позиции (pieceSide - rotation + 6) % 6
+        // Значит на позиции boardPos находится сторона (boardPos + rotation) % 6
+        for (let boardPos = 0; boardPos < 6; boardPos++) {
+          const expectedPieceSide = (boardPos + rotation) % 6;
+          const expectedColor = pieceSideColorsAtRotation0[expectedPieceSide];
+          const actualColor = boardPositionColors[boardPos];
+          if (expectedColor !== actualColor) {
+            hasError = true;
+            console.error(`ОШИБКА ПОВОРОТА: rotation=${rotation}, позиция доски=${boardPos}, ожидался цвет стороны доминошки ${expectedPieceSide} (${COLOR_NAMES[expectedColor]}), получен ${COLOR_NAMES[actualColor]}`);
+          }
+        }
+        
+        connectionsByRotation[rotation] = connectionSet;
+        
+        if (validConnections.length > 0) {
+          addLogMessage(`  → валидно: ${validConnections.join('; ')}`);
+        } else {
+          addLogMessage(`  → нет валидных соединений`);
+        }
+      }
+      
+      // ПРОВЕРКА: соединения между разными поворотами не должны совпадать или пересекаться
+      for (let r1 = 0; r1 < 6; r1++) {
+        for (let r2 = r1 + 1; r2 < 6; r2++) {
+          const set1 = connectionsByRotation[r1];
+          const set2 = connectionsByRotation[r2];
+          
+          // Находим пересечение (общие соединения)
+          const intersection = [];
+          for (const conn of set1) {
+            if (set2.has(conn)) {
+              intersection.push(conn);
+            }
+          }
+          
+          if (intersection.length > 0) {
+            // Найдены общие соединения между разными поворотами - это ошибка!
+            const intersectionStr = intersection.join(', ');
+            console.error(`ОШИБКА: Повороты ${r1} и ${r2} имеют общие соединения: ${intersectionStr}`);
+            addLogMessage(`  ⚠️ ОШИБКА: Повороты ${r1} и ${r2} имеют общие соединения (${intersectionStr}) - это неверно!`);
+          }
+        }
+      }
+    }
+    
+    function placePiece(coord) {
+      if (!selectedPiece || !canPlacePiece(selectedPiece, coord)) return;
+      
+      const sideColors = [];
+      for (let i = 0; i < 6; i++) {
+        const color = getColorAtSide(selectedPiece, i);
+        sideColors.push(`${i} - ${COLOR_NAMES[color]}`);
+      }
+      addLogMessage(`Установленная доминошка: ${sideColors.join(', ')}`);
+      
+      placedPieces.push({ coord, piece: selectedPiece });
+      availablePieces = availablePieces.filter(p => p.id !== selectedPiece.id);
+      selectedPiece = null;
+      score += 10;
+      
+      document.getElementById('score').textContent = score;
+      
+      setTimeout(() => {
+        availablePieces.push(generateRandomPiece(`piece-${Date.now()}`));
+        renderAvailablePieces();
+      }, 100);
+      
+      renderBoard();
+      renderAvailablePieces();
+    }
+    
+    function resetGame() {
+      const newStartPiece = generateRandomPiece('start');
+      placedPieces = [{ coord: { q: 0, r: 0, s: 0 }, piece: newStartPiece }];
+      availablePieces = Array.from({ length: 5 }, (_, i) => generateRandomPiece(`piece-${i}`));
+      selectedPiece = null;
+      score = 0;
+      logMessages = [];
+      
+      document.getElementById('score').textContent = score;
+      
+      const sideColors = [];
+      for (let i = 0; i < 6; i++) {
+        const color = getColorAtSide(newStartPiece, i);
+        sideColors.push(`${i} - ${COLOR_NAMES[color]}`);
+      }
+      addLogMessage(`Установленная доминошка: ${sideColors.join(', ')}`);
+      
+      renderBoard();
+      renderAvailablePieces();
+    }
+    
+    // Инициализация
+    window.onload = () => {
+      resetGame();
+    };
+  </script>
+</body>
+</html>
