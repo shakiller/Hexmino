@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Гексагональное Домино</title>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -241,7 +242,7 @@
         <div class="title">Гексагональное Домино</div>
         <div style="font-size: 14px; color: #64748b;">Соединяйте доминошки цвет к цвету</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 20px;">
+      <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
         <div>
           <div style="font-size: 14px; color: #64748b;">Режим игры</div>
           <select id="gameMode" style="padding: 8px 12px; border-radius: 6px; border: 2px solid #cbd5e1; font-size: 14px; cursor: pointer;">
@@ -250,6 +251,22 @@
             <option value="bot">Игра с ботом</option>
             <option value="online">Онлайн</option>
           </select>
+        </div>
+        <div id="onlineStatus" style="display: none;">
+          <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Статус подключения</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div id="serverStatus" style="display: flex; align-items: center; gap: 4px;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block;"></span>
+              <span style="font-size: 12px;">Сервер</span>
+            </div>
+            <div id="peerStatus" style="display: flex; align-items: center; gap: 4px;">
+              <span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block;"></span>
+              <span style="font-size: 12px;">Игрок</span>
+            </div>
+            <div id="myPeerId" style="font-size: 11px; color: #64748b; padding: 4px 8px; background: #f1f5f9; border-radius: 4px; display: none;"></div>
+            <input type="text" id="connectPeerId" placeholder="ID соперника" style="padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; width: 120px; display: none;">
+            <button id="connectBtn" style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; display: none;">Подключиться</button>
+          </div>
         </div>
         <div>
           <div style="font-size: 14px; color: #64748b;">Ход игрока</div>
@@ -263,6 +280,10 @@
       <!-- Игрок 1 (слева) -->
       <div class="player-panel" id="playerPanel0">
         <div class="player-title" id="playerTitle0">Игрок 1</div>
+        <div style="text-align: center; padding: 5px 10px; background: #f1f5f9; border-radius: 4px; margin-bottom: 10px;">
+          <div style="font-size: 12px; color: #64748b;">Очки</div>
+          <div style="font-size: 20px; font-weight: bold; color: #3b82f6;" id="playerScore0">0</div>
+        </div>
         <div class="panel">
           <div class="panel-title">Доступные доминошки</div>
           <div class="available-pieces" id="availablePieces0"></div>
@@ -287,6 +308,10 @@
       <!-- Игрок 2 (справа) -->
       <div class="player-panel" id="playerPanel1">
         <div class="player-title" id="playerTitle1">Игрок 2</div>
+        <div style="text-align: center; padding: 5px 10px; background: #f1f5f9; border-radius: 4px; margin-bottom: 10px;">
+          <div style="font-size: 12px; color: #64748b;">Очки</div>
+          <div style="font-size: 20px; font-weight: bold; color: #3b82f6;" id="playerScore1">0</div>
+        </div>
         <div class="panel">
           <div class="panel-title">Доступные доминошки</div>
           <div class="available-pieces" id="availablePieces1"></div>
@@ -326,13 +351,21 @@
     let gameMode = 'single'; // 'single', 'two', 'bot', 'online'
     let placedPieces = [];
     let players = [
-      { id: 0, name: 'Игрок 1', pieces: [], bazaarPieces: [], isBot: false },
-      { id: 1, name: 'Игрок 2', pieces: [], bazaarPieces: [], isBot: false }
+      { id: 0, name: 'Игрок 1', pieces: [], bazaarPieces: [], isBot: false, score: 0 },
+      { id: 1, name: 'Игрок 2', pieces: [], bazaarPieces: [], isBot: false, score: 0 }
     ];
     let currentPlayer = 0; // Текущий игрок (0 или 1)
     let selectedPiece = null;
     let logMessages = [];
     let isBotThinking = false; // Флаг, что бот думает
+    let gameOver = false; // Флаг окончания игры
+    
+    // PeerJS для онлайн режима
+    let peer = null;
+    let conn = null;
+    let myPeerId = null;
+    let isHost = false; // Является ли этот игрок хостом (создал комнату)
+    let onlinePlayerId = 0; // ID этого игрока в онлайн режиме (0 или 1)
     
     // Утилиты для hex координат
     function hexToPixel(q, r) {
@@ -892,7 +925,27 @@
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         g.setAttribute('transform', `translate(${centerX + x}, ${centerY + y})`);
         
-        const canPlace = selectedPiece ? canPlacePiece(selectedPiece, coord) : false;
+        // Проверяем, можно ли разместить доминошку с любым поворотом
+        let canPlace = false;
+        let validRotation = selectedPiece ? selectedPiece.rotation : null;
+        if (selectedPiece) {
+          // Сначала проверяем текущий поворот игрока
+          if (canPlacePiece(selectedPiece, coord)) {
+            canPlace = true;
+            validRotation = selectedPiece.rotation;
+          } else {
+            // Если текущий поворот не валиден, пробуем другие повороты
+            for (let offset = 1; offset < 6; offset++) {
+              const rot = (selectedPiece.rotation + offset) % 6;
+              const testPiece = { ...selectedPiece, rotation: rot };
+              if (canPlacePiece(testPiece, coord)) {
+                canPlace = true;
+                validRotation = rot;
+                break; // Нашли валидный поворот
+              }
+            }
+          }
+        }
         
         const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
         polygon.setAttribute('points', getHexPoints(HEX_SIZE - 2));
@@ -903,7 +956,25 @@
         polygon.style.cursor = canPlace ? 'pointer' : 'not-allowed';
         
         if (canPlace) {
-          polygon.addEventListener('click', () => placePiece(coord));
+          // Сохраняем валидный поворот для использования при размещении
+          const storedValidRotation = validRotation;
+          polygon.addEventListener('click', () => {
+            if (!selectedPiece) return;
+            
+            // Если найден другой валидный поворот, обновляем его в selectedPiece и оригинальной доминошке
+            if (storedValidRotation !== null && storedValidRotation !== selectedPiece.rotation) {
+              // Находим оригинальную доминошку в массиве игрока и обновляем её поворот
+              for (const player of players) {
+                const found = player.pieces.find(p => p.id === selectedPiece.id);
+                if (found) {
+                  found.rotation = storedValidRotation;
+                  selectedPiece.rotation = storedValidRotation;
+                  break;
+                }
+              }
+            }
+            placePiece(coord);
+          });
           polygon.addEventListener('mouseenter', () => {
             polygon.setAttribute('fill', '#dbeafe');
             polygon.setAttribute('stroke', '#3b82f6');
@@ -919,7 +990,7 @@
         
         // Если это валидная позиция и выбрана доминошка, рисуем превью
         // Превью показывает цвета на фиксированных позициях доски (не поворачивается, как в правой части визуализации лога)
-        if (canPlace && selectedPiece) {
+        if (canPlace && selectedPiece && validRotation !== null) {
           const previewGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
           previewGroup.setAttribute('transform', `translate(${centerX + x}, ${centerY + y})`);
           
@@ -949,9 +1020,10 @@
           }
           
           // Рисуем 6 секторов с цветами, которые будут видны на позициях доски
-          // Используем getColorAtSide, чтобы получить цвет на каждой позиции
+          // Используем найденный валидный поворот для правильного отображения превью
+          const previewPiece = { ...selectedPiece, rotation: validRotation };
           for (let side = 0; side < 6; side++) {
-            const color = getColorAtSide(selectedPiece, side);
+            const color = getColorAtSide(previewPiece, side);
             const segment = createPreviewSegment(0, 0, side, color, HEX_SIZE, '#1e293b');
             previewGroup.appendChild(segment);
           }
@@ -969,6 +1041,20 @@
           previewGroup.setAttribute('style', 'cursor: pointer;');
           previewGroup.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (!selectedPiece) return;
+            
+            // Если найден другой валидный поворот, обновляем его в selectedPiece и оригинальной доминошке
+            if (validRotation !== null && validRotation !== selectedPiece.rotation) {
+              // Находим оригинальную доминошку в массиве игрока и обновляем её поворот
+              for (const player of players) {
+                const found = player.pieces.find(p => p.id === selectedPiece.id);
+                if (found) {
+                  found.rotation = validRotation;
+                  selectedPiece.rotation = validRotation;
+                  break;
+                }
+              }
+            }
             placePiece(coord);
           });
           previewGroup.addEventListener('mouseenter', () => {
@@ -1142,6 +1228,12 @@
             // Блокируем поворот для неактивного игрока
             if (!isCurrentPlayer) return;
             
+            // В онлайн режиме дополнительная проверка
+            if (gameMode === 'online' && onlinePlayerId !== currentPlayer) {
+              alert('Сейчас не ваш ход!');
+              return;
+            }
+            
             piece.rotation = (piece.rotation + 1) % 6;
             if (selectedPiece && selectedPiece.id === piece.id) {
               selectedPiece.rotation = piece.rotation;
@@ -1154,7 +1246,21 @@
           card.onclick = () => {
             // Блокируем клики для неактивного игрока
             if (!isCurrentPlayer) {
-              alert(`Сейчас ход ${players[currentPlayer].name}!`);
+              if (gameMode === 'online') {
+                const isMyTurn = (onlinePlayerId === currentPlayer);
+                if (!isMyTurn) {
+                  alert('Сейчас не ваш ход!');
+                  return;
+                }
+              } else {
+                alert(`Сейчас ход ${players[currentPlayer].name}!`);
+                return;
+              }
+            }
+            
+            // В онлайн режиме дополнительная проверка
+            if (gameMode === 'online' && onlinePlayerId !== currentPlayer) {
+              alert('Сейчас не ваш ход!');
               return;
             }
             
@@ -1367,7 +1473,17 @@
     }
     
     function placePiece(coord) {
-      if (!selectedPiece || !canPlacePiece(selectedPiece, coord)) return;
+      if (gameOver) return false; // Игра закончена, нельзя делать ходы
+      if (!selectedPiece || !canPlacePiece(selectedPiece, coord)) return false;
+      
+      // В онлайн режиме проверяем, что это ход текущего игрока
+      if (gameMode === 'online') {
+        const isMyTurn = (onlinePlayerId === currentPlayer);
+        if (!isMyTurn) {
+          alert('Сейчас не ваш ход!');
+          return false;
+        }
+      }
       
       // Создаём копию доминошки с текущим поворотом
       const pieceToPlace = { ...selectedPiece, rotation: selectedPiece.rotation };
@@ -1380,6 +1496,23 @@
       // Убираем лог из игрового процесса
       // addLogMessage(`Установленная доминошка: ${sideColors.join(', ')}`);
       
+      // Подсчитываем количество соседних доминошек для начисления очков
+      const neighbors = getHexNeighbors(coord);
+      let connectedCount = 0;
+      for (const neighborCoord of neighbors) {
+        const hasNeighbor = placedPieces.some(placed => 
+          hexEquals(placed.coord, neighborCoord)
+        );
+        if (hasNeighbor) {
+          connectedCount++;
+        }
+      }
+      
+      // Начисляем очки: 1 базовое + количество соседей (к которым пристыковалась)
+      const points = 1 + connectedCount;
+      players[currentPlayer].score += points;
+      console.log(`Игрок ${players[currentPlayer].name} получил ${points} очков (1 базовое + ${connectedCount} соседей)`);
+      
       // Размещаем доминошку
       placedPieces.push({ coord, piece: pieceToPlace });
       
@@ -1387,6 +1520,23 @@
       const currentPlayerObj = players[currentPlayer];
       currentPlayerObj.pieces = currentPlayerObj.pieces.filter(p => p.id !== selectedPiece.id);
       selectedPiece = null;
+      
+      // Обновляем отображение очков
+      updateScoresDisplay();
+      
+      // Проверяем окончание игры
+      checkGameEnd();
+      
+      // Отправляем информацию о ходе в онлайн режиме
+      if (gameMode === 'online' && conn && conn.open) {
+        sendOnlineMessage({
+          type: 'piecePlaced',
+          coord: coord,
+          piece: pieceToPlace,
+          playerId: currentPlayer,
+          playerPieces: currentPlayerObj.pieces
+        });
+      }
       
       // Переключаем игрока (кроме режима одного игрока)
       if (gameMode !== 'single') {
@@ -1401,6 +1551,8 @@
       renderAvailablePieces();
       updateBazaarButtons();
       
+      return true; // Успешное размещение
+      
       // Если следующий игрок - бот, делаем его ход
       if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking) {
         setTimeout(() => makeBotMove(), 500); // Небольшая задержка для визуализации
@@ -1408,6 +1560,75 @@
       
       // Очищаем лог при новом ходе (опционально, можно оставить историю)
       // logMessages = [];
+    }
+    
+    function checkGameEnd() {
+      // Если игра уже закончилась, не проверяем снова
+      if (gameOver) return true;
+      
+      // Игра заканчивается, если:
+      // 1. Базары обоих игроков пусты
+      // 2. И один из игроков выложил все свои доминошки
+      
+      const allBazaarsEmpty = players[0].bazaarPieces.length === 0 && players[1].bazaarPieces.length === 0;
+      const player0Empty = players[0].pieces.length === 0;
+      const player1Empty = players[1].pieces.length === 0;
+      
+      if (allBazaarsEmpty && (player0Empty || player1Empty)) {
+        gameOver = true;
+        
+        // Игра окончена, определяем победителя
+        let winner = null;
+        let message = '';
+        
+        if (player0Empty && player1Empty) {
+          // Оба выложили все - ничья
+          message = 'Ничья! Оба игрока выложили все доминошки.';
+        } else if (player0Empty) {
+          // Первый игрок выложил все
+          winner = 0;
+          message = `Победитель: ${players[0].name}! Выложены все доминошки.`;
+        } else if (player1Empty) {
+          // Второй игрок выложил все
+          winner = 1;
+          message = `Победитель: ${players[1].name}! Выложены все доминошки.`;
+        }
+        
+        // Если ничья, определяем по очкам, затем по количеству оставшихся доминошек
+        if (!winner && allBazaarsEmpty) {
+          if (players[0].score > players[1].score) {
+            winner = 0;
+            message = `Победитель: ${players[0].name}! Больше очков (${players[0].score} vs ${players[1].score}).`;
+          } else if (players[1].score > players[0].score) {
+            winner = 1;
+            message = `Победитель: ${players[1].name}! Больше очков (${players[1].score} vs ${players[0].score}).`;
+          } else if (players[0].pieces.length < players[1].pieces.length) {
+            winner = 0;
+            message = `Победитель: ${players[0].name}! Одинаковые очки (${players[0].score}), но осталось меньше доминошек (${players[0].pieces.length} vs ${players[1].pieces.length}).`;
+          } else if (players[1].pieces.length < players[0].pieces.length) {
+            winner = 1;
+            message = `Победитель: ${players[1].name}! Одинаковые очки (${players[1].score}), но осталось меньше доминошек (${players[1].pieces.length} vs ${players[0].pieces.length}).`;
+          } else {
+            message = `Ничья! Одинаковые очки (${players[0].score}) и одинаковое количество доминошек (${players[0].pieces.length}).`;
+          }
+        }
+        
+        // Добавляем информацию об очках к сообщению
+        if (winner !== null) {
+          message += `\nОчки: ${players[0].name} - ${players[0].score}, ${players[1].name} - ${players[1].score}`;
+        }
+        
+        setTimeout(() => {
+          alert(message);
+          if (confirm('Хотите начать новую игру?')) {
+            resetGame();
+          }
+        }, 300);
+        
+        return true;
+      }
+      
+      return false;
     }
     
     function updateCurrentPlayerDisplay() {
@@ -1421,8 +1642,24 @@
       }
     }
     
+    function updateScoresDisplay() {
+      for (let i = 0; i < 2; i++) {
+        const scoreEl = document.getElementById(`playerScore${i}`);
+        if (scoreEl) {
+          scoreEl.textContent = players[i].score || 0;
+        }
+      }
+    }
+    
     function makeBotMove() {
       if (isBotThinking) return;
+      
+      // Проверяем, не закончилась ли игра
+      if (checkGameEnd()) {
+        isBotThinking = false;
+        return;
+      }
+      
       isBotThinking = true;
       
       const bot = players[currentPlayer];
@@ -1467,12 +1704,49 @@
       // Если ничего не получилось, передаём ход
       if (!moveFound) {
         isBotThinking = false;
-        alert('Бот не может сделать ход. Переход хода.');
-        currentPlayer = (currentPlayer + 1) % 2;
+        // Проверяем, может ли игрок сделать ход
+        const otherPlayer = (currentPlayer + 1) % 2;
+        const otherPlayerHasMoves = hasValidMoves(players[otherPlayer]);
+        
+        if (!otherPlayerHasMoves && allBazaarsEmpty()) {
+          // Оба игрока не могут сделать ход и базары пусты - игра окончена
+          checkGameEnd();
+          return;
+        }
+        
+        // Передаём ход другому игроку
+        currentPlayer = otherPlayer;
         updateCurrentPlayerDisplay();
         renderAvailablePieces();
         updateBazaarButtons();
+        
+        // Если другой игрок тоже бот (не должно быть, но на всякий случай)
+        if (players[currentPlayer].isBot && !isBotThinking) {
+          setTimeout(() => makeBotMove(), 500);
+        }
       }
+    }
+    
+    function hasValidMoves(player) {
+      // Проверяет, есть ли у игрока валидные ходы
+      const availablePositions = getAvailablePositions();
+      
+      for (const piece of player.pieces) {
+        for (let rotation = 0; rotation < 6; rotation++) {
+          piece.rotation = rotation;
+          for (const coord of availablePositions) {
+            if (canPlacePiece(piece, coord)) {
+              return true;
+            }
+          }
+        }
+      }
+      
+      return false;
+    }
+    
+    function allBazaarsEmpty() {
+      return players[0].bazaarPieces.length === 0 && players[1].bazaarPieces.length === 0;
     }
     
     function resetGame() {
@@ -1522,23 +1796,37 @@
         players[0].name = 'Игрок 1';
         players[1].name = 'Игрок 2';
       } else if (gameMode === 'online') {
-        // Онлайн режим - пока работает как два игрока (для будущей реализации)
+        // Онлайн режим - настраиваем игроков
         players[0].pieces = shuffled.slice(1, 7).map(piece => ({ ...piece, rotation: 0 }));
         players[1].pieces = shuffled.slice(7, 13).map(piece => ({ ...piece, rotation: 0 }));
         players[0].bazaarPieces = shuffled.slice(13, Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
         players[1].bazaarPieces = shuffled.slice(Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
         players[0].isBot = false;
         players[1].isBot = false;
-        players[0].name = 'Вы';
-        players[1].name = 'Соперник';
-        // TODO: Добавить подключение к серверу для онлайн игры
-        alert('Онлайн режим: подключение к серверу будет добавлено позже. Сейчас работает как два игрока.');
+        
+        // Определяем, кто хост (первый подключившийся)
+        if (!conn || !conn.open) {
+          isHost = true;
+          onlinePlayerId = 0;
+          players[0].name = 'Вы';
+          players[1].name = 'Соперник';
+        } else {
+          // Если уже подключены, используем существующие имена
+          if (onlinePlayerId === 0) {
+            players[0].name = 'Вы';
+            players[1].name = 'Соперник';
+          } else {
+            players[0].name = 'Соперник';
+            players[1].name = 'Вы';
+          }
+        }
       }
       
       currentPlayer = 0; // Начинает первый игрок
       selectedPiece = null;
       logMessages = [];
       isBotThinking = false;
+      gameOver = false; // Сбрасываем флаг окончания игры
       
       // Скрываем панель лога в игровом режиме
       document.getElementById('logPanel').style.display = 'none';
@@ -1557,6 +1845,11 @@
     }
     
     function takeFromBazaar(playerId) {
+      // Блокируем взятие из базара для неактивного игрока
+      if (playerId !== currentPlayer) {
+        return;
+      }
+      
       const player = players[playerId];
       if (player.bazaarPieces.length === 0) {
         alert('Базар пуст!');
@@ -1569,8 +1862,32 @@
       piece.rotation = 0;
       player.pieces.push(piece);
       
+      // Отправляем информацию о взятии из базара в онлайн режиме
+      if (gameMode === 'online' && conn && conn.open) {
+        sendOnlineMessage({
+          type: 'bazaarTaken',
+          playerId: playerId,
+          playerPieces: player.pieces,
+          playerBazaarPieces: player.bazaarPieces
+        });
+      }
+      
+      // В режимах с несколькими игроками передаём ход после взятия из базара
+      if (gameMode !== 'single') {
+        currentPlayer = (currentPlayer + 1) % 2;
+        updateCurrentPlayerDisplay();
+      }
+      
+      // Проверяем окончание игры
+      checkGameEnd();
+      
       renderAvailablePieces();
       updateBazaarButtons();
+      
+      // Если следующий игрок - бот, делаем его ход
+      if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking) {
+        setTimeout(() => makeBotMove(), 500);
+      }
     }
     
     function updateBazaarButtons() {
@@ -1587,11 +1904,288 @@
       }
     }
     
+    // Функции для онлайн режима через PeerJS
+    function initPeerJS() {
+      if (typeof Peer === 'undefined') {
+        updateServerStatus(false);
+        alert('PeerJS не загружен. Проверьте подключение к интернету.');
+        return;
+      }
+      
+      try {
+        // Создаём Peer с случайным ID
+        peer = new Peer({
+          host: 'peerjs-server.herokuapp.com',
+          port: 443,
+          path: '/',
+          secure: true,
+          debug: 2
+        });
+        
+        peer.on('open', (id) => {
+          myPeerId = id;
+          updateServerStatus(true);
+          updateMyPeerId(id);
+          console.log('PeerJS подключен, мой ID:', id);
+        });
+        
+        peer.on('connection', (connection) => {
+          conn = connection;
+          updatePeerStatus(true);
+          console.log('Подключен игрок:', connection.peer);
+          
+          connection.on('data', (data) => {
+            handleOnlineMessage(data);
+          });
+          
+          connection.on('close', () => {
+            updatePeerStatus(false);
+            conn = null;
+            alert('Соперник отключился');
+          });
+          
+          connection.on('error', (err) => {
+            console.error('Ошибка соединения:', err);
+            updatePeerStatus(false);
+          });
+        });
+        
+        peer.on('error', (err) => {
+          console.error('Ошибка PeerJS:', err);
+          updateServerStatus(false);
+          
+          if (err.type === 'server-error') {
+            // Пробуем альтернативный сервер
+            try {
+              peer = new Peer({
+                host: '0.peerjs.com',
+                port: 443,
+                path: '/',
+                secure: true
+              });
+              peer.on('open', (id) => {
+                myPeerId = id;
+                updateServerStatus(true);
+                updateMyPeerId(id);
+              });
+            } catch (e) {
+              console.error('Не удалось подключиться к альтернативному серверу:', e);
+            }
+          }
+        });
+        
+      } catch (error) {
+        console.error('Ошибка инициализации PeerJS:', error);
+        updateServerStatus(false);
+      }
+    }
+    
+    function connectToPeer(peerId) {
+      if (!peer || !peer.open) {
+        alert('Сервер недоступен. Подождите подключения.');
+        return;
+      }
+      
+      try {
+        conn = peer.connect(peerId);
+        
+        conn.on('open', () => {
+          updatePeerStatus(true);
+          isHost = false;
+          onlinePlayerId = 1; // Подключающийся игрок становится вторым
+          console.log('Подключились к игроку:', peerId);
+          
+          // Запрашиваем состояние игры у хоста
+          sendOnlineMessage({ type: 'requestState' });
+        });
+        
+        conn.on('data', (data) => {
+          handleOnlineMessage(data);
+        });
+        
+        conn.on('close', () => {
+          updatePeerStatus(false);
+          conn = null;
+          alert('Соединение разорвано');
+        });
+        
+        conn.on('error', (err) => {
+          console.error('Ошибка соединения:', err);
+          updatePeerStatus(false);
+          alert('Не удалось подключиться к игроку');
+        });
+        
+      } catch (error) {
+        console.error('Ошибка подключения:', error);
+        alert('Ошибка подключения: ' + error.message);
+      }
+    }
+    
+    function sendOnlineMessage(data) {
+      if (conn && conn.open) {
+        conn.send(data);
+      } else {
+        console.warn('Соединение не установлено, не могу отправить сообщение');
+      }
+    }
+    
+    function handleOnlineMessage(data) {
+      console.log('Получено сообщение:', data);
+      
+      switch (data.type) {
+        case 'requestState':
+          // Отправляем текущее состояние игры
+          if (isHost) {
+            sendOnlineMessage({
+              type: 'gameState',
+              placedPieces: placedPieces,
+              players: players,
+              currentPlayer: currentPlayer
+            });
+          }
+          break;
+          
+        case 'gameState':
+          // Синхронизируем состояние игры
+          if (!isHost) {
+            placedPieces = data.placedPieces || [];
+            players = data.players || players;
+            currentPlayer = data.currentPlayer || 0;
+            renderBoard();
+            renderAvailablePieces();
+            updateCurrentPlayerDisplay();
+          }
+          break;
+          
+        case 'piecePlaced':
+          // Соперник разместил доминошку
+          const { coord, piece } = data;
+          placedPieces.push({ coord, piece });
+          
+          // Обновляем доминошки и очки соперника
+          if (data.playerId !== undefined) {
+            players[data.playerId].pieces = data.playerPieces || [];
+            if (data.playerScore !== undefined) {
+              players[data.playerId].score = data.playerScore;
+            }
+          }
+          
+          // Переключаем ход
+          currentPlayer = (currentPlayer + 1) % 2;
+          
+          renderBoard();
+          renderAvailablePieces();
+          updateCurrentPlayerDisplay();
+          updateScoresDisplay();
+          checkGameEnd();
+          break;
+          
+        case 'pieceSelected':
+          // Соперник выбрал доминошку (для визуализации)
+          break;
+          
+        case 'bazaarTaken':
+          // Соперник взял из базара
+          if (data.playerId !== undefined) {
+            players[data.playerId].pieces = data.playerPieces || [];
+            players[data.playerId].bazaarPieces = data.playerBazaarPieces || [];
+            currentPlayer = (currentPlayer + 1) % 2;
+            renderAvailablePieces();
+            updateBazaarButtons();
+            updateCurrentPlayerDisplay();
+          }
+          break;
+      }
+    }
+    
+    function updateServerStatus(connected) {
+      const statusEl = document.getElementById('serverStatus');
+      if (statusEl) {
+        const dot = statusEl.querySelector('span');
+        const text = statusEl.querySelectorAll('span')[1];
+        if (dot) {
+          dot.style.background = connected ? '#22c55e' : '#ef4444';
+        }
+        if (text) {
+          text.textContent = connected ? 'Сервер ✓' : 'Сервер ✗';
+        }
+      }
+    }
+    
+    function updatePeerStatus(connected) {
+      const statusEl = document.getElementById('peerStatus');
+      if (statusEl) {
+        const dot = statusEl.querySelector('span');
+        const text = statusEl.querySelectorAll('span')[1];
+        if (dot) {
+          dot.style.background = connected ? '#22c55e' : '#ef4444';
+        }
+        if (text) {
+          text.textContent = connected ? 'Игрок ✓' : 'Игрок ✗';
+        }
+      }
+    }
+    
+    function updateMyPeerId(id) {
+      const myIdEl = document.getElementById('myPeerId');
+      const connectInput = document.getElementById('connectPeerId');
+      const connectBtn = document.getElementById('connectBtn');
+      
+      if (myIdEl) {
+        myIdEl.textContent = `Мой ID: ${id}`;
+        myIdEl.style.display = 'block';
+      }
+      
+      if (connectInput) {
+        connectInput.style.display = 'block';
+      }
+      
+      if (connectBtn) {
+        connectBtn.style.display = 'block';
+        connectBtn.onclick = () => {
+          const peerId = connectInput.value.trim();
+          if (peerId) {
+            connectToPeer(peerId);
+          } else {
+            alert('Введите ID соперника');
+          }
+        };
+      }
+    }
+    
+    function showOnlineUI(show) {
+      const onlineStatus = document.getElementById('onlineStatus');
+      if (onlineStatus) {
+        onlineStatus.style.display = show ? 'block' : 'none';
+      }
+    }
+    
     // Обработчик изменения режима игры
     function onGameModeChange() {
       const modeSelect = document.getElementById('gameMode');
       if (modeSelect) {
-        gameMode = modeSelect.value;
+        const newMode = modeSelect.value;
+        
+        // Закрываем соединение при смене режима
+        if (gameMode === 'online' && newMode !== 'online') {
+          if (conn) {
+            conn.close();
+            conn = null;
+          }
+          if (peer) {
+            peer.destroy();
+            peer = null;
+          }
+          showOnlineUI(false);
+        }
+        
+        // Инициализируем PeerJS при выборе онлайн режима
+        if (newMode === 'online' && gameMode !== 'online') {
+          showOnlineUI(true);
+          initPeerJS();
+        }
+        
+        gameMode = newMode;
         resetGame();
       }
     }
