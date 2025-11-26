@@ -66,6 +66,8 @@
     }
     
     .log-panel {
+      display: none !important;
+      visibility: hidden !important;
       background: white;
       padding: 20px;
       border-radius: 10px;
@@ -110,18 +112,26 @@
     .available-pieces {
       display: flex;
       flex-direction: column;
-      gap: 15px;
+      gap: 6px;
+      max-height: 500px;
+      overflow-y: auto;
     }
     
     .piece-card {
       border: 2px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 15px;
+      border-radius: 6px;
+      padding: 6px;
       cursor: pointer;
       transition: all 0.2s;
       display: flex;
       align-items: center;
-      gap: 15px;
+      gap: 6px;
+    }
+    
+    .piece-card svg {
+      width: 40px !important;
+      height: 40px !important;
+      flex-shrink: 0;
     }
     
     .piece-card:hover {
@@ -134,13 +144,14 @@
     }
     
     .rotate-btn {
-      padding: 8px 12px;
+      padding: 4px 8px;
       background: #f1f5f9;
       border: 1px solid #cbd5e1;
-      border-radius: 6px;
+      border-radius: 4px;
       cursor: pointer;
-      font-size: 20px;
+      font-size: 14px;
       transition: all 0.2s;
+      flex-shrink: 0;
     }
     
     .rotate-btn:hover {
@@ -202,8 +213,8 @@
           <svg id="gameBoard" viewBox="0 0 1000 600"></svg>
         </div>
         
-        <div class="log-panel">
-          <div class="log-title">Лог</div>
+        <div class="log-panel" id="logPanel" style="display: none;">
+          <div class="log-title">Лог (отладка)</div>
           <div class="log-content" id="logContent">Лог пуст</div>
         </div>
       </div>
@@ -212,6 +223,9 @@
         <div class="panel">
           <div class="panel-title">Доступные доминошки</div>
           <div class="available-pieces" id="availablePieces"></div>
+          <button class="bazaar-btn" id="bazaarBtn" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
+            Взять из базара (<span id="bazaarCount">0</span>)
+          </button>
         </div>
         
         <div class="panel">
@@ -243,6 +257,7 @@
     // Состояние игры
     let placedPieces = [];
     let availablePieces = [];
+    let bazaarPieces = []; // Оставшиеся доминошки в базаре
     let selectedPiece = null;
     let score = 0;
     let logMessages = [];
@@ -332,6 +347,25 @@
       // Стороны доминошки 0,1,2 = topColor, стороны 3,4,5 = bottomColor
       const isTopHalf = (pieceSide === 0 || pieceSide === 1 || pieceSide === 2);
       return isTopHalf ? piece.topColor : piece.bottomColor;
+    }
+    
+    // Генерирует полный набор доминошек: все комбинации двух цветов (включая одинаковые)
+    function generateAllDominoPieces() {
+      const pieces = [];
+      let id = 0;
+      // Генерируем все комбинации: каждая доминошка может иметь два цвета (включая одинаковые)
+      for (let i = 0; i < COLORS.length; i++) {
+        for (let j = i; j < COLORS.length; j++) {
+          // Создаём доминошку с цветами i и j (i <= j для избежания дубликатов)
+          pieces.push({
+            id: `domino-${id++}`,
+            topColor: COLORS[i],
+            bottomColor: COLORS[j],
+            rotation: 0
+          });
+        }
+      }
+      return pieces;
     }
     
     function generateRandomPiece(id) {
@@ -646,12 +680,100 @@
       return hasNeighbor;
     }
     
+    function calculateBoardBounds() {
+      // Собираем все координаты: размещенные доминошки и доступные позиции
+      const allCoords = [];
+      
+      placedPieces.forEach(placed => {
+        allCoords.push(placed.coord);
+      });
+      
+      const availablePositions = getAvailablePositions();
+      availablePositions.forEach(coord => {
+        allCoords.push(coord);
+      });
+      
+      if (allCoords.length === 0) {
+        // Если нет доминошек, возвращаем центр
+        return {
+          minX: -HEX_SIZE * 2,
+          maxX: HEX_SIZE * 2,
+          minY: -HEX_SIZE * 2,
+          maxY: HEX_SIZE * 2,
+          centerX: 0,
+          centerY: 0
+        };
+      }
+      
+      // Преобразуем все координаты в пиксели
+      const pixels = allCoords.map(coord => hexToPixel(coord.q, coord.r));
+      
+      // Находим границы
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      
+      pixels.forEach(({ x, y }) => {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+      });
+      
+      // Добавляем отступы
+      const padding = HEX_SIZE * 2;
+      minX -= padding;
+      maxX += padding;
+      minY -= padding;
+      maxY += padding;
+      
+      // Вычисляем центр
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      
+      return { minX, maxX, minY, maxY, centerX, centerY };
+    }
+    
     function renderBoard() {
       const svg = document.getElementById('gameBoard');
       svg.innerHTML = '';
       
-      const centerX = 500;
-      const centerY = 300;
+      // Лог полностью отключен - всегда скрыт
+      const logPanel = document.getElementById('logPanel');
+      if (logPanel) {
+        logPanel.style.display = 'none';
+        logPanel.style.visibility = 'hidden';
+      }
+      
+      // Вычисляем границы и центр для автоматического масштабирования
+      const bounds = calculateBoardBounds();
+      const boardWidth = bounds.maxX - bounds.minX;
+      const boardHeight = bounds.maxY - bounds.minY;
+      
+      // Получаем размер контейнера SVG
+      const boardElement = document.querySelector('.board');
+      const svgWidth = boardElement ? boardElement.clientWidth - 40 : 1000; // -40 для padding
+      const svgHeight = boardElement ? boardElement.clientHeight - 40 : 600;
+      
+      // Вычисляем масштаб, чтобы всё поместилось с небольшим отступом
+      // SVG автоматически масштабирует содержимое на основе viewBox
+      // Если viewBox больше размера SVG - содержимое уменьшится
+      // Если viewBox меньше размера SVG - содержимое увеличится
+      const scaleX = svgWidth / boardWidth;
+      const scaleY = svgHeight / boardHeight;
+      const scale = Math.min(scaleX, scaleY); // Выбираем меньший масштаб для вписывания
+      
+      // viewBox должен содержать все координаты
+      // SVG сам масштабирует, чтобы viewBox поместился в размер SVG
+      const viewBoxWidth = boardWidth;
+      const viewBoxHeight = boardHeight;
+      const viewBoxX = bounds.centerX - viewBoxWidth / 2;
+      const viewBoxY = bounds.centerY - viewBoxHeight / 2;
+      
+      svg.setAttribute('viewBox', `${viewBoxX} ${viewBoxY} ${viewBoxWidth} ${viewBoxHeight}`);
+      
+      // Центр для отрисовки (теперь относительно viewBox)
+      const centerX = bounds.centerX;
+      const centerY = bounds.centerY;
       
       const availablePositions = getAvailablePositions();
       
@@ -713,7 +835,7 @@
             segment.setAttribute('fill', color);
             segment.setAttribute('stroke', strokeColor);
             segment.setAttribute('stroke-width', '1');
-            segment.setAttribute('opacity', '0.8');
+            segment.setAttribute('opacity', '0.6');
             return segment;
           }
           
@@ -731,9 +853,23 @@
           outline.setAttribute('fill', 'none');
           outline.setAttribute('stroke', '#3b82f6');
           outline.setAttribute('stroke-width', '3');
-          outline.setAttribute('opacity', '0.9');
+          outline.setAttribute('opacity', '0.7');
           previewGroup.appendChild(outline);
           
+          // Добавляем обработчик клика на превью, чтобы можно было кликнуть для установки
+          previewGroup.setAttribute('style', 'cursor: pointer;');
+          previewGroup.addEventListener('click', (e) => {
+            e.stopPropagation();
+            placePiece(coord);
+          });
+          previewGroup.addEventListener('mouseenter', () => {
+            outline.setAttribute('stroke', '#2563eb');
+            outline.setAttribute('opacity', '1');
+          });
+          previewGroup.addEventListener('mouseleave', () => {
+            outline.setAttribute('stroke', '#3b82f6');
+            outline.setAttribute('opacity', '0.7');
+          });
           svg.appendChild(previewGroup);
         }
       });
@@ -785,22 +921,7 @@
         
         g.appendChild(rotatedG);
         
-        // Номера сторон (НЕ вращаются)
-        for (let side = 0; side < 6; side++) {
-          const midpoint = getEdgeMidpoint(side, HEX_SIZE - 5);
-          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-          text.setAttribute('x', midpoint.x);
-          text.setAttribute('y', midpoint.y);
-          text.setAttribute('font-size', '14');
-          text.setAttribute('fill', '#ffffff');
-          text.setAttribute('stroke', '#000000');
-          text.setAttribute('stroke-width', '0.8');
-          text.setAttribute('text-anchor', 'middle');
-          text.setAttribute('dominant-baseline', 'middle');
-          text.setAttribute('font-weight', 'bold');
-          text.textContent = side;
-          g.appendChild(text);
-        }
+        // Номера сторон убраны для игрового режима
         
         svg.appendChild(g);
       });
@@ -817,22 +938,26 @@
           card.classList.add('selected');
         }
         
+        // Уменьшенный размер для доступных доминошек - делаем в 2 раза меньше чем на поле
+        const AVAILABLE_HEX_SIZE = 18; // 18 вместо 40 на поле (в 2.2 раза меньше)
+        
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.setAttribute('width', '80');
-        svg.setAttribute('height', '80');
-        svg.setAttribute('viewBox', '-50 -50 100 100');
+        // Размер контейнера должен быть немного больше доминошки
+        const containerSize = AVAILABLE_HEX_SIZE * 2 + 4; // 40 пикселей
+        svg.setAttribute('width', String(containerSize));
+        svg.setAttribute('height', String(containerSize));
+        svg.setAttribute('viewBox', `-${AVAILABLE_HEX_SIZE} -${AVAILABLE_HEX_SIZE} ${AVAILABLE_HEX_SIZE * 2} ${AVAILABLE_HEX_SIZE * 2}`);
         
         const rotation = piece.rotation * 60;
         const rotationRad = (rotation * Math.PI) / 180;
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         g.setAttribute('transform', `rotate(${rotation})`);
-        
         const vertices = [];
         for (let i = 0; i < 6; i++) {
           const angle = (Math.PI / 3) * i;
           vertices.push({
-            x: HEX_SIZE * Math.cos(angle),
-            y: HEX_SIZE * Math.sin(angle)
+            x: AVAILABLE_HEX_SIZE * Math.cos(angle),
+            y: AVAILABLE_HEX_SIZE * Math.sin(angle)
           });
         }
         
@@ -851,34 +976,15 @@
         g.appendChild(path2);
         
         const outline = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-        outline.setAttribute('points', getHexPoints(HEX_SIZE - 1));
+        outline.setAttribute('points', getHexPoints(AVAILABLE_HEX_SIZE - 1));
         outline.setAttribute('fill', 'none');
         outline.setAttribute('stroke', '#1e293b');
-        outline.setAttribute('stroke-width', '3');
+        outline.setAttribute('stroke-width', '1');
         g.appendChild(outline);
         
         svg.appendChild(g);
         
-        // Номера сторон (НЕ поворачиваются вместе с доминошкой)
-        for (let side = 0; side < 6; side++) {
-          const midpoint = getEdgeMidpoint(side, HEX_SIZE - 5);
-          // Применяем поворот к координатам, чтобы разместить текст в правильной позиции
-          const rotatedX = midpoint.x * Math.cos(rotationRad) - midpoint.y * Math.sin(rotationRad);
-          const rotatedY = midpoint.x * Math.sin(rotationRad) + midpoint.y * Math.cos(rotationRad);
-          
-          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-          text.setAttribute('x', rotatedX);
-          text.setAttribute('y', rotatedY);
-          text.setAttribute('font-size', '14');
-          text.setAttribute('fill', '#ffffff');
-          text.setAttribute('stroke', '#000000');
-          text.setAttribute('stroke-width', '0.8');
-          text.setAttribute('text-anchor', 'middle');
-          text.setAttribute('dominant-baseline', 'middle');
-          text.setAttribute('font-weight', 'bold');
-          text.textContent = side;
-          svg.appendChild(text);
-        }
+        // Номера сторон убраны для игрового режима
         
         const rotateBtn = document.createElement('button');
         rotateBtn.className = 'rotate-btn';
@@ -888,16 +994,24 @@
           piece.rotation = (piece.rotation + 1) % 6;
           if (selectedPiece && selectedPiece.id === piece.id) {
             selectedPiece.rotation = piece.rotation;
+            // Обновляем доску, чтобы превью обновилось с новым поворотом
+            renderBoard();
           }
           renderAvailablePieces();
         };
         
         card.onclick = () => {
           selectedPiece = piece;
-          analyzePieceRotations(piece);
+          // Убираем автоматический анализ поворотов - он нужен только для отладки
+          // analyzePieceRotations(piece);
+          // Очищаем лог, если он был открыт для предыдущей доминошки
+          logMessages = [];
+          updateLogDisplay();
           renderAvailablePieces();
           renderBoard();
         };
+        
+        // Анализ поворотов полностью отключен - лог скрыт
         
         card.appendChild(svg);
         card.appendChild(rotateBtn);
@@ -906,6 +1020,9 @@
     }
     
     function analyzePieceRotations(piece) {
+      // Очищаем предыдущий лог
+      logMessages = [];
+      
       // Всегда показываем доминошку с rotation = 0 для корректного отображения
       const basePiece = { ...piece, rotation: 0 };
       
@@ -1092,52 +1209,112 @@
     function placePiece(coord) {
       if (!selectedPiece || !canPlacePiece(selectedPiece, coord)) return;
       
+      // Создаём копию доминошки с текущим поворотом
+      const pieceToPlace = { ...selectedPiece, rotation: selectedPiece.rotation };
+      
       const sideColors = [];
       for (let i = 0; i < 6; i++) {
-        const color = getColorAtSide(selectedPiece, i);
+        const color = getColorAtSide(pieceToPlace, i);
         sideColors.push(`${i} - ${COLOR_NAMES[color]}`);
       }
-      addLogMessage(`Установленная доминошка: ${sideColors.join(', ')}`);
+      // Убираем лог из игрового процесса
+      // addLogMessage(`Установленная доминошка: ${sideColors.join(', ')}`);
       
-      placedPieces.push({ coord, piece: selectedPiece });
+      // Размещаем доминошку
+      placedPieces.push({ coord, piece: pieceToPlace });
+      
+      // Удаляем доминошку из доступных (не генерируем новые)
       availablePieces = availablePieces.filter(p => p.id !== selectedPiece.id);
       selectedPiece = null;
       score += 10;
       
       document.getElementById('score').textContent = score;
       
-      setTimeout(() => {
-        availablePieces.push(generateRandomPiece(`piece-${Date.now()}`));
-        renderAvailablePieces();
-      }, 100);
-      
+      // Обновляем отображение
       renderBoard();
       renderAvailablePieces();
+      updateBazaarButton();
+      
+      // Очищаем лог при новом ходе (опционально, можно оставить историю)
+      // logMessages = [];
     }
     
     function resetGame() {
-      const newStartPiece = generateRandomPiece('start');
-      placedPieces = [{ coord: { q: 0, r: 0, s: 0 }, piece: newStartPiece }];
-      availablePieces = Array.from({ length: 5 }, (_, i) => generateRandomPiece(`piece-${i}`));
+      // Генерируем полный набор доминошек
+      const allPieces = generateAllDominoPieces();
+      
+      // Перемешиваем доминошки
+      const shuffled = [...allPieces].sort(() => Math.random() - 0.5);
+      
+      // Первая доминошка устанавливается в центре
+      const startPiece = shuffled[0];
+      startPiece.rotation = Math.floor(Math.random() * 6); // Случайный поворот для начала
+      placedPieces = [{ coord: { q: 0, r: 0, s: 0 }, piece: startPiece }];
+      
+      // Первые 6 доминошек доступны игроку, остальные в базаре
+      availablePieces = shuffled.slice(1, 7).map(piece => ({ ...piece, rotation: 0 }));
+      bazaarPieces = shuffled.slice(7).map(piece => ({ ...piece, rotation: 0 }));
+      
       selectedPiece = null;
       score = 0;
       logMessages = [];
       
+      // Скрываем панель лога в игровом режиме
+      document.getElementById('logPanel').style.display = 'none';
+      
       document.getElementById('score').textContent = score;
       
-      const sideColors = [];
-      for (let i = 0; i < 6; i++) {
-        const color = getColorAtSide(newStartPiece, i);
-        sideColors.push(`${i} - ${COLOR_NAMES[color]}`);
-      }
-      addLogMessage(`Установленная доминошка: ${sideColors.join(', ')}`);
+      // Убираем лог из игрового процесса
+      // const sideColors = [];
+      // for (let i = 0; i < 6; i++) {
+      //   const color = getColorAtSide(startPiece, i);
+      //   sideColors.push(`${i} - ${COLOR_NAMES[color]}`);
+      // }
+      // addLogMessage(`Установленная доминошка: ${sideColors.join(', ')}`);
       
       renderBoard();
       renderAvailablePieces();
+      updateBazaarButton();
+    }
+    
+    function takeFromBazaar() {
+      if (bazaarPieces.length === 0) {
+        alert('Базар пуст!');
+        return;
+      }
+      
+      // Берём случайную доминошку из базара
+      const randomIndex = Math.floor(Math.random() * bazaarPieces.length);
+      const piece = bazaarPieces.splice(randomIndex, 1)[0];
+      piece.rotation = 0;
+      availablePieces.push(piece);
+      
+      renderAvailablePieces();
+      updateBazaarButton();
+    }
+    
+    function updateBazaarButton() {
+      const btn = document.getElementById('bazaarBtn');
+      const count = document.getElementById('bazaarCount');
+      if (btn && count) {
+        count.textContent = bazaarPieces.length;
+        btn.disabled = bazaarPieces.length === 0;
+        btn.style.opacity = bazaarPieces.length === 0 ? '0.5' : '1';
+        btn.style.cursor = bazaarPieces.length === 0 ? 'not-allowed' : 'pointer';
+      }
     }
     
     // Инициализация
     window.onload = () => {
+      // Убеждаемся, что лог скрыт при загрузке
+      document.getElementById('logPanel').style.display = 'none';
+      
+      // Обработчик кнопки базара
+      const bazaarBtn = document.getElementById('bazaarBtn');
+      if (bazaarBtn) {
+        bazaarBtn.addEventListener('click', takeFromBazaar);
+      }
+      
       resetGame();
     };
   </script>
