@@ -2551,26 +2551,30 @@
           updateServerStatus(true);
           updateMyPeerId(id);
           console.log('PeerJS подключен, мой ID:', id);
-          addOnlineLog(`PeerJS подключен, мой ID: ${id}`, 'success');
+          addOnlineLog(`✅ PeerJS подключен, мой ID: ${id}`, 'success');
+          addOnlineLog(`🎮 Режим: ${isHost ? 'ХОСТ (ожидание подключения)' : 'Второй игрок'}`, 'info');
         });
         
         peer.on('connection', (connection) => {
           console.log('Получено входящее соединение от:', connection.peer);
-          addOnlineLog(`Входящее соединение от: ${connection.peer}`, 'receive');
+          addOnlineLog(`📥 Входящее соединение от: ${connection.peer}`, 'receive');
+          addOnlineLog(`Состояние соединения: open=${connection.open}, readyState=${connection.peerConnection?.readyState}`, 'info');
+          
           conn = connection;
           
-          // Устанавливаем обработчики до события open
+          // Устанавливаем обработчики СРАЗУ, до события open
           connection.on('data', (data) => {
-            console.log('Хост получил данные от второго игрока:', data.type);
+            console.log('Хост получил данные от второго игрока:', data.type, data);
+            addOnlineLog(`📥 Получены данные: ${data.type}`, 'receive');
             handleOnlineMessage(data);
           });
           
-          connection.on('open', () => {
+          // Проверяем, не открыто ли соединение уже
+          if (connection.open) {
+            addOnlineLog(`⚠️ Соединение уже открыто!`, 'info');
             updatePeerStatus(true);
-            console.log('Соединение с игроком установлено (хост):', connection.peer);
             addOnlineLog(`✅ Соединение установлено! ID второго игрока: ${connection.peer}`, 'success');
             
-            // Обновляем статус подключения
             const peerStatusEl = document.getElementById('peerStatus');
             if (peerStatusEl) {
               const text = peerStatusEl.querySelectorAll('span')[1];
@@ -2579,12 +2583,9 @@
               }
             }
             
-            // Показываем уведомление первому игроку
             alert('Игрок подключился! Игра синхронизируется...');
             
-            // Отправляем текущее состояние игры новому игроку
             setTimeout(() => {
-              console.log('Хост отправляет начальное состояние игры');
               addOnlineLog(`Отправка начального состояния игры (${placedPieces.length} доминошек на доске)`, 'send');
               sendOnlineMessage({
                 type: 'gameState',
@@ -2594,7 +2595,38 @@
                 startPiece: placedPieces[0] ? placedPieces[0].piece : null
               });
             }, 100);
-          });
+          } else {
+            connection.on('open', () => {
+              updatePeerStatus(true);
+              console.log('Соединение с игроком установлено (хост):', connection.peer);
+              addOnlineLog(`✅ Соединение установлено! ID второго игрока: ${connection.peer}`, 'success');
+              
+              // Обновляем статус подключения
+              const peerStatusEl = document.getElementById('peerStatus');
+              if (peerStatusEl) {
+                const text = peerStatusEl.querySelectorAll('span')[1];
+                if (text) {
+                  text.textContent = 'Игрок подключен ✓';
+                }
+              }
+              
+              // Показываем уведомление первому игроку
+              alert('Игрок подключился! Игра синхронизируется...');
+              
+              // Отправляем текущее состояние игры новому игроку
+              setTimeout(() => {
+                console.log('Хост отправляет начальное состояние игры');
+                addOnlineLog(`Отправка начального состояния игры (${placedPieces.length} доминошек на доске)`, 'send');
+                sendOnlineMessage({
+                  type: 'gameState',
+                  placedPieces: placedPieces,
+                  players: players,
+                  currentPlayer: currentPlayer,
+                  startPiece: placedPieces[0] ? placedPieces[0].piece : null
+                });
+              }, 100);
+            });
+          }
           
           connection.on('close', () => {
             updatePeerStatus(false);
@@ -2994,11 +3026,13 @@
         myIdEl.style.display = 'block';
         // Добавляем обработчик для копирования ID
         myIdEl.onclick = () => {
+          addOnlineLog(`📋 Копирование ID: ${id}`, 'info');
           navigator.clipboard.writeText(id).then(() => {
             const originalText = myIdEl.textContent;
             myIdEl.textContent = 'ID скопирован!';
             myIdEl.style.background = '#22c55e';
             myIdEl.style.color = 'white';
+            addOnlineLog(`✅ ID скопирован в буфер обмена`, 'success');
             setTimeout(() => {
               myIdEl.textContent = originalText;
               myIdEl.style.background = '#f1f5f9';
@@ -3006,6 +3040,7 @@
             }, 2000);
           }).catch(err => {
             console.error('Ошибка копирования:', err);
+            addOnlineLog(`❌ Ошибка копирования ID: ${err.message}`, 'error');
             alert('Не удалось скопировать ID. ID: ' + id);
           });
         };
