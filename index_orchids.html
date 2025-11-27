@@ -2520,23 +2520,34 @@
         });
         
         peer.on('connection', (connection) => {
+          console.log('Получено входящее соединение от:', connection.peer);
           conn = connection;
-          console.log('Подключен игрок:', connection.peer);
           
           // Устанавливаем обработчики до события open
           connection.on('data', (data) => {
+            console.log('Хост получил данные от второго игрока:', data.type);
             handleOnlineMessage(data);
           });
           
           connection.on('open', () => {
             updatePeerStatus(true);
-            console.log('Соединение с игроком установлено:', connection.peer);
+            console.log('Соединение с игроком установлено (хост):', connection.peer);
+            
+            // Обновляем статус подключения
+            const peerStatusEl = document.getElementById('peerStatus');
+            if (peerStatusEl) {
+              const text = peerStatusEl.querySelectorAll('span')[1];
+              if (text) {
+                text.textContent = 'Игрок подключен ✓';
+              }
+            }
             
             // Показываем уведомление первому игроку
             alert('Игрок подключился! Игра синхронизируется...');
             
             // Отправляем текущее состояние игры новому игроку
             setTimeout(() => {
+              console.log('Хост отправляет начальное состояние игры');
               sendOnlineMessage({
                 type: 'gameState',
                 placedPieces: placedPieces,
@@ -2618,12 +2629,24 @@
           const readyBtn = document.getElementById('readyBtn');
           if (readyBtn) {
             readyBtn.style.display = 'block';
+            readyBtn.disabled = false;
+            readyBtn.textContent = 'Готов';
+          }
+          
+          // Обновляем статус подключения
+          const peerStatusEl = document.getElementById('peerStatus');
+          if (peerStatusEl) {
+            const text = peerStatusEl.querySelectorAll('span')[1];
+            if (text) {
+              text.textContent = 'Подключено ✓';
+            }
           }
           
           // Запрашиваем состояние игры у хоста
           setTimeout(() => {
+            console.log('Второй игрок запрашивает состояние игры');
             sendOnlineMessage({ type: 'requestState' });
-          }, 100);
+          }, 200);
         });
         
         conn.on('data', (data) => {
@@ -2650,9 +2673,20 @@
     
     function sendOnlineMessage(data) {
       if (conn && conn.open) {
-        conn.send(data);
+        console.log('Отправка сообщения:', data.type, data);
+        try {
+          conn.send(data);
+          console.log('Сообщение отправлено успешно');
+        } catch (error) {
+          console.error('Ошибка отправки сообщения:', error);
+          alert('Ошибка отправки сообщения: ' + error.message);
+        }
       } else {
-        console.warn('Соединение не установлено, не могу отправить сообщение');
+        console.warn('Соединение не установлено, не могу отправить сообщение', {
+          conn: !!conn,
+          open: conn ? conn.open : false
+        });
+        alert('Соединение не установлено! Проверьте подключение.');
       }
     }
     
@@ -2677,15 +2711,26 @@
           
         case 'requestSync':
           // Запрос на принудительную синхронизацию от второго игрока
+          console.log('Получен запрос на синхронизацию', { isHost, conn: !!conn, connOpen: conn ? conn.open : false });
           if (isHost) {
-            console.log('Получен запрос на синхронизацию от второго игрока');
-            sendOnlineMessage({
-              type: 'gameState',
-              placedPieces: placedPieces,
-              players: players,
-              currentPlayer: currentPlayer,
-              startPiece: placedPieces[0] ? placedPieces[0].piece : null
+            console.log('Хост отправляет состояние игры второму игроку');
+            console.log('Текущее состояние:', {
+              placedPiecesCount: placedPieces.length,
+              players: players.map(p => ({ name: p.name, piecesCount: p.pieces.length, bazaarCount: p.bazaarPieces.length, score: p.score })),
+              currentPlayer
             });
+            
+            setTimeout(() => {
+              sendOnlineMessage({
+                type: 'gameState',
+                placedPieces: placedPieces,
+                players: players,
+                currentPlayer: currentPlayer,
+                startPiece: placedPieces[0] ? placedPieces[0].piece : null
+              });
+            }, 100);
+          } else {
+            console.warn('Запрос на синхронизацию получен не хостом!');
           }
           break;
           
@@ -2704,10 +2749,21 @@
           
         case 'gameState':
           // Синхронизируем состояние игры
+          console.log('Получено состояние игры от хоста', {
+            isHost,
+            placedPiecesCount: data.placedPieces?.length || 0,
+            playersCount: data.players?.length || 0
+          });
+          
           if (!isHost) {
             // Сохраняем центральную доминошку и размещенные доминошки
             const receivedPlacedPieces = data.placedPieces || [];
             const receivedPlayers = data.players || [];
+            
+            console.log('Синхронизация состояния:', {
+              receivedPlacedPieces: receivedPlacedPieces.length,
+              receivedPlayers: receivedPlayers.length
+            });
             
             // Синхронизируем центральную доминошку
             if (receivedPlacedPieces.length > 0) {
@@ -2715,6 +2771,7 @@
                 coord: p.coord,
                 piece: { ...p.piece }
               }));
+              console.log('Размещенные доминошки синхронизированы:', placedPieces.length);
             }
             
             // Синхронизируем состояние первого игрока (хоста)
@@ -2763,19 +2820,24 @@
             }
             
             // Скрываем кнопку "Готов" после синхронизации
-            const readyBtn = document.getElementById('readyBtn');
-            if (readyBtn) {
-              readyBtn.style.display = 'none';
+            const readyBtnSync = document.getElementById('readyBtn');
+            if (readyBtnSync) {
+              readyBtnSync.textContent = 'Готов';
+              readyBtnSync.disabled = false;
+              readyBtnSync.style.display = 'none'; // Скрываем после успешной синхронизации
             }
             
+            console.log('Обновление отображения после синхронизации');
             renderBoard();
             renderAvailablePieces();
             updateCurrentPlayerDisplay();
             updateScoresDisplay();
             updateBazaarButtons();
             
-            console.log('Состояние игры синхронизировано');
+            console.log('Состояние игры синхронизировано успешно');
             alert('Игра синхронизирована! Вы готовы играть.');
+          } else {
+            console.warn('Состояние игры получено хостом, игнорируем');
           }
           break;
           
@@ -2907,15 +2969,36 @@
       // Кнопка "Готов" для второго игрока
       if (readyBtn) {
         readyBtn.onclick = () => {
-          if (!isHost && conn && conn.open) {
-            // Запрашиваем синхронизацию у хоста
-            sendOnlineMessage({ type: 'requestSync' });
-            readyBtn.textContent = 'Синхронизация...';
-            readyBtn.disabled = true;
-            setTimeout(() => {
-              readyBtn.textContent = 'Готов';
-              readyBtn.disabled = false;
-            }, 2000);
+          console.log('Кнопка "Готов" нажата', {
+            isHost,
+            conn: !!conn,
+            connOpen: conn ? conn.open : false
+          });
+          
+          if (!isHost) {
+            if (conn && conn.open) {
+              // Запрашиваем синхронизацию у хоста
+              console.log('Отправка запроса на синхронизацию...');
+              sendOnlineMessage({ type: 'requestSync' });
+              readyBtn.textContent = 'Синхронизация...';
+              readyBtn.disabled = true;
+              
+              // Восстанавливаем кнопку через 5 секунд, если синхронизация не произошла
+              setTimeout(() => {
+                if (readyBtn.disabled) {
+                  readyBtn.textContent = 'Готов';
+                  readyBtn.disabled = false;
+                }
+              }, 5000);
+            } else {
+              alert('Соединение не установлено! Проверьте подключение к первому игроку.');
+              console.error('Соединение не открыто:', {
+                conn: !!conn,
+                open: conn ? conn.open : false
+              });
+            }
+          } else {
+            alert('Вы хост, синхронизация не требуется.');
           }
         };
       }
