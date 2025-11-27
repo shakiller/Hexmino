@@ -2528,13 +2528,19 @@
           // Кнопка активна только если:
           // 1. Это текущий игрок (i === currentPlayer)
           // 2. У этого игрока есть доминошки в базаре (player.bazaarPieces.length > 0)
+          // 3. Игра не закончена
           const isCurrentPlayer = (i === currentPlayer);
           const hasBazaarPieces = player.bazaarPieces.length > 0;
-          const shouldBeEnabled = isCurrentPlayer && hasBazaarPieces;
+          const shouldBeEnabled = isCurrentPlayer && hasBazaarPieces && !gameOver;
           
           btn.disabled = !shouldBeEnabled;
           btn.style.opacity = shouldBeEnabled ? '1' : '0.5';
           btn.style.cursor = shouldBeEnabled ? 'pointer' : 'not-allowed';
+          
+          // Отладочная информация
+          if (gameMode === 'online' && i === currentPlayer) {
+            console.log(`updateBazaarButtons: игрок ${i} (${player.name}), currentPlayer=${currentPlayer}, hasBazaar=${hasBazaarPieces}, enabled=${shouldBeEnabled}`);
+          }
         }
       }
     }
@@ -2996,7 +3002,10 @@
             players[1].score = receivedPlayers[1]?.score || 0;
             players[1].name = 'Вы';
             
-            currentPlayer = data.currentPlayer || 0;
+            // Синхронизируем текущего игрока
+            const receivedCurrentPlayer = data.currentPlayer !== undefined ? data.currentPlayer : 0;
+            currentPlayer = receivedCurrentPlayer;
+            console.log('Синхронизация currentPlayer:', currentPlayer, 'onlinePlayerId:', onlinePlayerId, 'players[0].name:', players[0].name, 'players[1].name:', players[1].name);
             
             // Применяем стиль для панели первого игрока (он становится серым для второго)
             const playerPanel0 = document.getElementById('playerPanel0');
@@ -3051,6 +3060,7 @@
           renderAvailablePieces();
           updateCurrentPlayerDisplay();
           updateScoresDisplay();
+          updateBazaarButtons();
           checkGameEnd();
           break;
           
