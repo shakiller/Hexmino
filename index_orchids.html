@@ -648,6 +648,29 @@
         logText += `      Игрок выбрал поворот: ${selectedPiece.rotation}\n`;
         logText += `      Система использует поворот: ${piece.rotation}\n`;
       }
+      
+      // Проверяем все возможные повороты для этой позиции
+      if (selectedPiece) {
+        logText += `\n   🔍 ПРОВЕРКА ВСЕХ ПОВОРОТОВ ДЛЯ ЭТОЙ ПОЗИЦИИ:\n`;
+        const validRotations = [];
+        for (let rot = 0; rot < 6; rot++) {
+          const testPiece = { ...selectedPiece, rotation: rot };
+          if (canPlacePiece(testPiece, coord)) {
+            validRotations.push(rot);
+            logText += `      Поворот ${rot}: ✅ ВАЛИДЕН (все соединения валидны)\n`;
+          } else {
+            logText += `      Поворот ${rot}: ❌ НЕВАЛИДЕН\n`;
+          }
+        }
+        if (validRotations.length > 0) {
+          logText += `   📋 Найдено ${validRotations.length} валидных поворотов: ${validRotations.join(', ')}\n`;
+          if (!validRotations.includes(piece.rotation)) {
+            logText += `   ⚠️  ОШИБКА: Используемый поворот ${piece.rotation} не в списке валидных!\n`;
+          }
+        } else {
+          logText += `   ❌ НЕТ ВАЛИДНЫХ ПОВОРОТОВ для этой позиции\n`;
+        }
+      }
       logText += '\n';
       
       // Цвета на каждой стороне доминошки (на позициях доски)
@@ -675,25 +698,44 @@
           const newPieceSide = directionToSide(coord, neighbor);
           const placedSide = directionToSide(neighbor, coord);
           
+          // Вычисляем углы для отладки
+          const fromPixel = hexToPixel(coord.q, coord.r);
+          const toPixel = hexToPixel(neighbor.q, neighbor.r);
+          const angle = Math.atan2(toPixel.y - fromPixel.y, toPixel.x - fromPixel.x);
+          let normalizedAngle = angle;
+          if (normalizedAngle < 0) normalizedAngle += Math.PI * 2;
+          const vertexIndex = Math.round(normalizedAngle / (Math.PI / 3)) % 6;
+          
           const newPieceColor = getColorAtSide(piece, newPieceSide);
           const placedColor = getColorAtSide(placedNeighbor.piece, placedSide);
+          
+          // Вычисляем pieceSide для отладки (какая сторона доминошки находится на стороне доски)
+          const pieceSide = (newPieceSide - piece.rotation + 6) % 6;
+          const placedPieceSide = (placedSide - placedNeighbor.piece.rotation + 6) % 6;
           
           const isValid = newPieceColor === placedColor;
           
           logText += `   ┌─ Сосед #${i + 1} ────────────────────────────────────────────┐\n`;
           logText += `   │ Координаты: (${neighbor.q}, ${neighbor.r}, ${neighbor.s})\n`;
+          logText += `   │ Угол от новой к соседу: ${(normalizedAngle * 180 / Math.PI).toFixed(1)}°\n`;
+          logText += `   │ Индекс вершины (vertexIndex): ${vertexIndex}\n`;
           logText += `   │\n`;
           logText += `   │ НОВАЯ ДОМИНОШКА:\n`;
-          logText += `   │   Сторона, смотрящая на соседа: ${newPieceSide}\n`;
+          logText += `   │   Поворот: ${piece.rotation}\n`;
+          logText += `   │   Сторона доски (directionToSide): ${newPieceSide}\n`;
+          logText += `   │   Сторона доминошки (pieceSide): ${pieceSide} = (${newPieceSide} - ${piece.rotation} + 6) % 6\n`;
           logText += `   │   Цвет на стороне ${newPieceSide}: ${newPieceColor} (${COLOR_NAMES[newPieceColor]})\n`;
+          logText += `   │   Проверка: сторона ${pieceSide} ${pieceSide < 3 ? 'topColor' : 'bottomColor'} = ${pieceSide < 3 ? COLOR_NAMES[piece.topColor] : COLOR_NAMES[piece.bottomColor]}\n`;
           logText += `   │\n`;
           logText += `   │ УСТАНОВЛЕННАЯ ДОМИНОШКА:\n`;
           logText += `   │   ID: ${placedNeighbor.piece.id}\n`;
           logText += `   │   Верхний цвет: ${placedNeighbor.piece.topColor} (${COLOR_NAMES[placedNeighbor.piece.topColor]})\n`;
           logText += `   │   Нижний цвет: ${placedNeighbor.piece.bottomColor} (${COLOR_NAMES[placedNeighbor.piece.bottomColor]})\n`;
           logText += `   │   Поворот: ${placedNeighbor.piece.rotation}\n`;
-          logText += `   │   Сторона, смотрящая на новую: ${placedSide}\n`;
+          logText += `   │   Сторона доски (directionToSide): ${placedSide}\n`;
+          logText += `   │   Сторона доминошки (pieceSide): ${placedPieceSide} = (${placedSide} - ${placedNeighbor.piece.rotation} + 6) % 6\n`;
           logText += `   │   Цвет на стороне ${placedSide}: ${placedColor} (${COLOR_NAMES[placedColor]})\n`;
+          logText += `   │   Проверка: сторона ${placedPieceSide} ${placedPieceSide < 3 ? 'topColor' : 'bottomColor'} = ${placedPieceSide < 3 ? COLOR_NAMES[placedNeighbor.piece.topColor] : COLOR_NAMES[placedNeighbor.piece.bottomColor]}\n`;
           logText += `   │\n`;
           
           if (isValid) {
@@ -1086,6 +1128,20 @@
           const newPieceColor = getColorAtSide(piece, newPieceSide);
           const placedColor = getColorAtSide(placedNeighbor.piece, placedSide);
           
+          // Детальное логирование для отладки
+          if (debugMode) {
+            console.log(`canPlacePiece проверка соединения:`);
+            console.log(`  Новая доминошка: ID=${piece.id}, rotation=${piece.rotation}, topColor=${piece.topColor}, bottomColor=${piece.bottomColor}`);
+            console.log(`  Координаты новой: (${coord.q}, ${coord.r}, ${coord.s})`);
+            console.log(`  Координаты соседа: (${neighbor.q}, ${neighbor.r}, ${neighbor.s})`);
+            console.log(`  Сторона новой доминошки (directionToSide): ${newPieceSide}`);
+            console.log(`  Цвет новой доминошки на стороне ${newPieceSide}: ${newPieceColor} (${COLOR_NAMES[newPieceColor]})`);
+            console.log(`  Установленная доминошка: ID=${placedNeighbor.piece.id}, rotation=${placedNeighbor.piece.rotation}, topColor=${placedNeighbor.piece.topColor}, bottomColor=${placedNeighbor.piece.bottomColor}`);
+            console.log(`  Сторона установленной (directionToSide): ${placedSide}`);
+            console.log(`  Цвет установленной на стороне ${placedSide}: ${placedColor} (${COLOR_NAMES[placedColor]})`);
+            console.log(`  Сравнение: ${COLOR_NAMES[newPieceColor]} === ${COLOR_NAMES[placedColor]}? ${newPieceColor === placedColor}`);
+          }
+          
           // КРИТИЧНО: Если хотя бы одно соединение невалидно, размещение запрещено
           if (newPieceColor !== placedColor) {
             // Отладочная информация
@@ -1257,20 +1313,19 @@
         let canPlace = false;
         let validRotation = selectedPiece ? selectedPiece.rotation : null;
         if (selectedPiece) {
-          // Сначала проверяем текущий поворот игрока
-          if (canPlacePiece(selectedPiece, coord)) {
-            canPlace = true;
-            validRotation = selectedPiece.rotation;
-          } else {
-            // Если текущий поворот не валиден, пробуем другие повороты
-            for (let offset = 1; offset < 6; offset++) {
-              const rot = (selectedPiece.rotation + offset) % 6;
-              const testPiece = { ...selectedPiece, rotation: rot };
-              if (canPlacePiece(testPiece, coord)) {
-                canPlace = true;
-                validRotation = rot;
-                break; // Нашли валидный поворот
-              }
+          // Проверяем ВСЕ повороты, чтобы найти тот, при котором ВСЕ соединения валидны
+          // Начинаем с текущего поворота игрока, затем проверяем остальные
+          const rotationsToCheck = [
+            selectedPiece.rotation,
+            ...Array.from({ length: 5 }, (_, i) => (selectedPiece.rotation + i + 1) % 6)
+          ];
+          
+          for (const rot of rotationsToCheck) {
+            const testPiece = { ...selectedPiece, rotation: rot };
+            if (canPlacePiece(testPiece, coord)) {
+              canPlace = true;
+              validRotation = rot;
+              break; // Нашли валидный поворот, при котором ВСЕ соединения валидны
             }
           }
         }
@@ -1285,8 +1340,27 @@
         
         // В режиме отладки добавляем обработчик клика для всех позиций
         if (debugMode && selectedPiece) {
+          // Сохраняем найденный валидный поворот для использования в логе
+          const debugValidRotation = validRotation !== null ? validRotation : selectedPiece.rotation;
+          const debugCanPlace = canPlace;
           polygon.addEventListener('click', () => {
-            logCellDebugInfo(coord, selectedPiece);
+            // Если найден валидный поворот, используем его для логирования
+            // Иначе используем текущий поворот игрока
+            const pieceForDebug = { ...selectedPiece, rotation: debugValidRotation };
+            
+            // Проверяем, действительно ли этот поворот валиден
+            if (debugCanPlace && validRotation !== null) {
+              const testPiece = { ...selectedPiece, rotation: validRotation };
+              if (canPlacePiece(testPiece, coord)) {
+                logCellDebugInfo(coord, pieceForDebug);
+              } else {
+                // Если автоматически подобранный поворот не валиден, логируем с текущим
+                console.warn('Автоматически подобранный поворот не валиден, используем текущий');
+                logCellDebugInfo(coord, selectedPiece);
+              }
+            } else {
+              logCellDebugInfo(coord, pieceForDebug);
+            }
           });
         }
         
@@ -1945,15 +2019,18 @@
       renderAvailablePieces();
       updateBazaarButtons();
       
-      return true; // Успешное размещение
-      
       // Если следующий игрок - бот, делаем его ход
-      if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking) {
+      if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking && !gameOver) {
         setTimeout(() => makeBotMove(), 500); // Небольшая задержка для визуализации
+      } else if (gameMode === 'bot') {
+        // Если следующий игрок не бот, сбрасываем флаг thinking
+        isBotThinking = false;
       }
       
       // Очищаем лог при новом ходе (опционально, можно оставить историю)
       // logMessages = [];
+      
+      return true; // Успешное размещение
     }
     
     function checkGameEnd() {
@@ -2062,6 +2139,19 @@
       }
     }
     
+    // Функция для подсчета количества соединений (соседей) для позиции
+    function countConnections(coord) {
+      const neighbors = getHexNeighbors(coord);
+      let connectionCount = 0;
+      for (const neighbor of neighbors) {
+        const hasNeighbor = placedPieces.some(placed => hexEquals(placed.coord, neighbor));
+        if (hasNeighbor) {
+          connectionCount++;
+        }
+      }
+      return connectionCount;
+    }
+    
     function makeBotMove() {
       if (isBotThinking) return;
       
@@ -2076,44 +2166,72 @@
       const bot = players[currentPlayer];
       const availablePositions = getAvailablePositions();
       
-      // Пробуем найти валидный ход для любой доминошки бота
-      let moveFound = false;
+      // Собираем все возможные ходы с оценкой (количество соединений)
+      const possibleMoves = [];
       
       for (const piece of bot.pieces) {
         // Пробуем все повороты доминошки
         for (let rotation = 0; rotation < 6; rotation++) {
           piece.rotation = rotation;
           
-          // Ищем валидную позицию для этой доминошки
+          // Ищем валидные позиции для этой доминошки
           for (const coord of availablePositions) {
             if (canPlacePiece(piece, coord)) {
-              // Нашли валидный ход!
-              selectedPiece = piece;
-              placePiece(coord);
-              isBotThinking = false;
-              moveFound = true;
-              return;
+              // Подсчитываем количество соединений (соседей)
+              const connections = countConnections(coord);
+              possibleMoves.push({
+                piece: piece,
+                coord: coord,
+                rotation: rotation,
+                connections: connections,
+                score: connections // Больше соединений = больше очков
+              });
             }
           }
         }
       }
       
+      // Если нашли возможные ходы, выбираем лучший (с максимальным количеством соединений)
+      if (possibleMoves.length > 0) {
+        // Сортируем по количеству соединений (по убыванию)
+        possibleMoves.sort((a, b) => b.connections - a.connections);
+        
+        // Находим максимальное количество соединений
+        const maxConnections = possibleMoves[0].connections;
+        
+        // Фильтруем только ходы с максимальным количеством соединений
+        const bestMoves = possibleMoves.filter(move => move.connections === maxConnections);
+        
+        // Если есть несколько лучших ходов, выбираем случайный (для разнообразия)
+        const bestMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+        
+        // Устанавливаем поворот доминошки
+        bestMove.piece.rotation = bestMove.rotation;
+        selectedPiece = bestMove.piece;
+        
+        console.log(`Бот выбрал ход: ${bestMove.piece.id}, соединений: ${bestMove.connections}, очков: ${bestMove.score + 1} (из ${bestMoves.length} лучших вариантов)`);
+        
+        placePiece(bestMove.coord);
+        // placePiece переключит игрока и вызовет makeBotMove для следующего хода, если нужно
+        return;
+      }
+      
       // Если не нашли валидный ход, пробуем взять из базара
-      if (!moveFound && bot.bazaarPieces.length > 0) {
+      if (possibleMoves.length === 0 && bot.bazaarPieces.length > 0) {
         takeFromBazaar(currentPlayer);
         // После взятия из базара пробуем снова
         setTimeout(() => {
-          if (currentPlayer === 1 && players[1].isBot && !isBotThinking) {
+          if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking && !gameOver) {
             makeBotMove();
           } else {
             isBotThinking = false;
           }
-        }, 300);
+        }, 500);
         return;
       }
       
       // Если ничего не получилось, передаём ход
-      if (!moveFound) {
+      if (possibleMoves.length === 0) {
         isBotThinking = false;
         // Проверяем, может ли игрок сделать ход
         const otherPlayer = (currentPlayer + 1) % 2;
@@ -2254,7 +2372,7 @@
       updateBazaarButtons();
       
       // Если первый игрок - бот, делаем его ход
-      if (gameMode === 'bot' && players[0].isBot && !isBotThinking) {
+      if (gameMode === 'bot' && players[0].isBot && !isBotThinking && !gameOver) {
         setTimeout(() => makeBotMove(), 500);
       }
     }
@@ -2300,7 +2418,7 @@
       updateBazaarButtons();
       
       // Если следующий игрок - бот, делаем его ход
-      if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking) {
+      if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking && !gameOver) {
         setTimeout(() => makeBotMove(), 500);
       }
     }
