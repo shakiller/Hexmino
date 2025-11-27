@@ -98,6 +98,17 @@
       color: white;
     }
     
+    .player-panel.online-opponent {
+      background: #f1f5f9;
+      border: 2px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    
+    .player-panel.online-opponent .panel {
+      background: #e2e8f0;
+    }
+    
     .board-container {
       flex: 1;
       display: flex;
@@ -2350,14 +2361,42 @@
           onlinePlayerId = 0;
           players[0].name = 'Вы';
           players[1].name = 'Соперник';
+          
+          // Панель второго игрока серая для хоста
+          const playerPanel1 = document.getElementById('playerPanel1');
+          if (playerPanel1) {
+            playerPanel1.classList.add('online-opponent');
+          }
+          const playerPanel0 = document.getElementById('playerPanel0');
+          if (playerPanel0) {
+            playerPanel0.classList.remove('online-opponent');
+          }
         } else {
           // Если уже подключены, используем существующие имена
           if (onlinePlayerId === 0) {
             players[0].name = 'Вы';
             players[1].name = 'Соперник';
+            
+            const playerPanel1 = document.getElementById('playerPanel1');
+            if (playerPanel1) {
+              playerPanel1.classList.add('online-opponent');
+            }
+            const playerPanel0 = document.getElementById('playerPanel0');
+            if (playerPanel0) {
+              playerPanel0.classList.remove('online-opponent');
+            }
           } else {
             players[0].name = 'Соперник';
             players[1].name = 'Вы';
+            
+            const playerPanel0 = document.getElementById('playerPanel0');
+            if (playerPanel0) {
+              playerPanel0.classList.add('online-opponent');
+            }
+            const playerPanel1 = document.getElementById('playerPanel1');
+            if (playerPanel1) {
+              playerPanel1.classList.remove('online-opponent');
+            }
           }
         }
       }
@@ -2559,6 +2598,16 @@
           onlinePlayerId = 1; // Подключающийся игрок становится вторым
           console.log('Подключились к игроку:', peerId);
           
+          // Применяем стиль для панели первого игрока (он становится серым для второго)
+          const playerPanel0 = document.getElementById('playerPanel0');
+          if (playerPanel0) {
+            playerPanel0.classList.add('online-opponent');
+          }
+          const playerPanel1 = document.getElementById('playerPanel1');
+          if (playerPanel1) {
+            playerPanel1.classList.remove('online-opponent');
+          }
+          
           // Отправляем уведомление о подключении
           sendOnlineMessage({ 
             type: 'peerConnected',
@@ -2608,13 +2657,17 @@
           updatePeerStatus(true);
           console.log('Соперник подключился, isHost:', data.isHost);
           
-          // Если мы хост и получили уведомление о подключении, отправляем состояние
+          // Если мы хост, показываем уведомление
           if (isHost) {
+            alert('Игрок подключился! Игра синхронизируется...');
+            
+            // Отправляем полное состояние игры
             sendOnlineMessage({
               type: 'gameState',
               placedPieces: placedPieces,
               players: players,
-              currentPlayer: currentPlayer
+              currentPlayer: currentPlayer,
+              startPiece: placedPieces[0] ? placedPieces[0].piece : null
             });
           }
           
@@ -2635,7 +2688,8 @@
               type: 'gameState',
               placedPieces: placedPieces,
               players: players,
-              currentPlayer: currentPlayer
+              currentPlayer: currentPlayer,
+              startPiece: placedPieces[0] ? placedPieces[0].piece : null
             });
           }
           break;
@@ -2643,17 +2697,61 @@
         case 'gameState':
           // Синхронизируем состояние игры
           if (!isHost) {
-            placedPieces = data.placedPieces || [];
-            players = data.players || players;
+            // Сохраняем центральную доминошку и размещенные доминошки
+            const receivedPlacedPieces = data.placedPieces || [];
+            const receivedPlayers = data.players || [];
+            
+            // Синхронизируем центральную доминошку
+            if (receivedPlacedPieces.length > 0) {
+              placedPieces = receivedPlacedPieces.map(p => ({
+                coord: p.coord,
+                piece: { ...p.piece }
+              }));
+            }
+            
+            // Синхронизируем состояние первого игрока (хоста)
+            if (receivedPlayers[0]) {
+              players[0].pieces = receivedPlayers[0].pieces.map(p => ({ ...p }));
+              players[0].bazaarPieces = receivedPlayers[0].bazaarPieces.map(p => ({ ...p }));
+              players[0].score = receivedPlayers[0].score || 0;
+              players[0].name = 'Соперник';
+            }
+            
+            // Перераздаём доминошки для второго игрока на основе того, что уже использовано
+            const allPieces = generateAllDominoPieces();
+            
+            // Собираем все использованные доминошки
+            const usedPieceIds = new Set();
+            // Все размещенные доминошки (включая центральную)
+            placedPieces.forEach(p => usedPieceIds.add(p.piece.id));
+            // Доминошки первого игрока (хоста)
+            if (players[0].pieces) {
+              players[0].pieces.forEach(p => usedPieceIds.add(p.id));
+            }
+            if (players[0].bazaarPieces) {
+              players[0].bazaarPieces.forEach(p => usedPieceIds.add(p.id));
+            }
+            
+            // Оставшиеся доминошки
+            const remainingPieces = allPieces.filter(p => !usedPieceIds.has(p.id));
+            const shuffled = [...remainingPieces].sort(() => Math.random() - 0.5);
+            
+            // Раздаём доминошки второму игроку
+            players[1].pieces = shuffled.slice(0, 6).map(piece => ({ ...piece, rotation: 0 }));
+            players[1].bazaarPieces = shuffled.slice(6).map(piece => ({ ...piece, rotation: 0 }));
+            players[1].score = receivedPlayers[1]?.score || 0;
+            players[1].name = 'Вы';
+            
             currentPlayer = data.currentPlayer || 0;
             
-            // Обновляем имена игроков для онлайн режима
-            if (onlinePlayerId === 1) {
-              players[0].name = 'Соперник';
-              players[1].name = 'Вы';
-            } else {
-              players[0].name = 'Вы';
-              players[1].name = 'Соперник';
+            // Применяем стиль для панели второго игрока
+            const playerPanel1 = document.getElementById('playerPanel1');
+            if (playerPanel1) {
+              playerPanel1.classList.add('online-opponent');
+            }
+            const playerPanel0 = document.getElementById('playerPanel0');
+            if (playerPanel0) {
+              playerPanel0.classList.remove('online-opponent');
             }
             
             renderBoard();
@@ -2663,6 +2761,7 @@
             updateBazaarButtons();
             
             console.log('Состояние игры синхронизировано');
+            alert('Игра синхронизирована! Вы готовы играть.');
           }
           break;
           
@@ -2798,6 +2897,12 @@
             peer = null;
           }
           showOnlineUI(false);
+          
+          // Убираем стили онлайн режима
+          const playerPanel0 = document.getElementById('playerPanel0');
+          const playerPanel1 = document.getElementById('playerPanel1');
+          if (playerPanel0) playerPanel0.classList.remove('online-opponent');
+          if (playerPanel1) playerPanel1.classList.remove('online-opponent');
         }
         
         // Инициализируем PeerJS при выборе онлайн режима
