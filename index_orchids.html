@@ -2532,13 +2532,20 @@
     function initPeerJS() {
       if (typeof Peer === 'undefined') {
         updateServerStatus(false);
-        alert('PeerJS не загружен. Проверьте подключение к интернету.');
+        addOnlineLog('❌ PeerJS не загружен. Проверьте подключение к интернету.', 'error');
         return;
       }
       
+      // Сразу устанавливаем статус "не подключено" при инициализации
+      // Это важно, чтобы индикатор не показывал зелёный цвет до реального подключения
+      updateServerStatus(false);
+      addOnlineLog('🔄 Попытка подключения к серверу PeerJS (0.peerjs.com)...', 'info');
+      addOnlineLog('ℹ️ Примечание: старый сервер peerjs-server.herokuapp.com больше не работает', 'info');
+      
       try {
-        addOnlineLog('🔄 Попытка подключения к серверу PeerJS...', 'info');
         // Создаём Peer с случайным ID - используем рабочий сервер
+        // Примечание: сервер peerjs-server.herokuapp.com был в коде изначально, но он больше не работает
+        // Используем 0.peerjs.com как основной сервер
         peer = new Peer({
           host: '0.peerjs.com',
           port: 443,
@@ -2611,8 +2618,8 @@
                 }
               }
               
-              // Показываем уведомление первому игроку
-              alert('Игрок подключился! Игра синхронизируется...');
+            // Логируем подключение
+            addOnlineLog('✅ Игрок подключился! Игра синхронизируется...', 'success');
               
               // Отправляем текущее состояние игры новому игроку
               setTimeout(() => {
@@ -2633,7 +2640,6 @@
             updatePeerStatus(false);
             conn = null;
             addOnlineLog('❌ Соперник отключился', 'error');
-            alert('Соперник отключился');
           });
           
           connection.on('error', (err) => {
