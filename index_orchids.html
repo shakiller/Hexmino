@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Гексагональное Домино</title>
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" async defer></script>
   <style>
     * {
       margin: 0;
@@ -110,27 +110,75 @@
     }
     
     .log-panel {
-      display: none !important;
-      visibility: hidden !important;
+      display: none;
       background: white;
       padding: 20px;
       border-radius: 10px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      height: 400px;
+      max-height: 500px;
       overflow-y: auto;
+      margin-top: 20px;
+    }
+    
+    .log-panel.visible {
+      display: block;
     }
     
     .log-title {
       font-weight: bold;
-      margin-bottom: 10px;
+      margin-bottom: 15px;
       color: #1e293b;
+      font-size: 18px;
+      border-bottom: 2px solid #3b82f6;
+      padding-bottom: 8px;
     }
     
     .log-content {
-      font-family: monospace;
+      font-family: 'Courier New', 'Consolas', 'Monaco', monospace;
       font-size: 12px;
-      color: #475569;
-      white-space: normal;
+      color: #1e293b;
+      white-space: pre-wrap;
+      line-height: 1.5;
+      background: #f8fafc;
+      padding: 15px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      max-height: 450px;
+      overflow-y: auto;
+      word-wrap: break-word;
+    }
+    
+    .log-section {
+      margin-bottom: 20px;
+      padding: 12px;
+      background: white;
+      border-left: 4px solid #3b82f6;
+      border-radius: 4px;
+    }
+    
+    .log-section-title {
+      font-weight: bold;
+      color: #3b82f6;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    
+    .log-item {
+      margin: 6px 0;
+      padding-left: 20px;
+    }
+    
+    .log-error {
+      color: #ef4444;
+      font-weight: bold;
+    }
+    
+    .log-success {
+      color: #22c55e;
+    }
+    
+    .log-warning {
+      color: #f59e0b;
     }
     
     .sidebar {
@@ -272,7 +320,8 @@
           <div style="font-size: 14px; color: #64748b;">Ход игрока</div>
           <div class="score" id="currentPlayerDisplay">Игрок 1</div>
         </div>
-        <button class="reset-btn" onclick="resetGame()">🔄 Сброс</button>
+        <button class="reset-btn" id="resetBtn">🔄 Сброс</button>
+        <button id="debugBtn" class="reset-btn" style="background: #ef4444;">🔍 Alert</button>
       </div>
     </div>
     
@@ -299,9 +348,9 @@
           <svg id="gameBoard" preserveAspectRatio="xMidYMid meet"></svg>
         </div>
         
-        <div class="log-panel" id="logPanel" style="display: none;">
+        <div class="log-panel" id="logPanel">
           <div class="log-title">Лог (отладка)</div>
-          <div class="log-content" id="logContent">Лог пуст</div>
+          <div class="log-content" id="logContent">Лог пуст. Включите режим отладки и кликните на клетку.</div>
         </div>
       </div>
       
@@ -359,6 +408,7 @@
     let logMessages = [];
     let isBotThinking = false; // Флаг, что бот думает
     let gameOver = false; // Флаг окончания игры
+    let debugMode = false; // Режим отладки для логирования невалидных размещений
     
     // PeerJS для онлайн режима
     let peer = null;
@@ -442,12 +492,17 @@
     // Функция определения цвета на стороне
     // side - это фиксированная позиция на доске (0-5), относительно которой находится сосед
     // 
-    // ЛОГИКА ПОВОРОТА (по часовой стрелке, как в SVG):
-    // - При rotation=0: сторона 0 доминошки находится на позиции 0
-    // - При повороте по часовой на rotation: сторона originalSide перемещается на позицию (originalSide + rotation) % 6
-    // - Обратно: на позиции side находится сторона доминошки (side - rotation + 6) % 6
+    // ЛОГИКА ПОВОРОТА (SVG rotate поворачивает по часовой стрелке):
+    // При повороте по часовой на rotation*60°:
+    // - Сторона pieceSide доминошки перемещается на позицию (pieceSide - rotation + 6) % 6 доски
+    // - Обратно: на позиции side доски находится сторона доминошки (side + rotation) % 6
+    // 
+    // ПРОВЕРКА: rotation=1, side=0 -> pieceSide=(0+1)%6=1 (topColor - синий)
+    //           Но по логу должно быть bottomColor (фиолетовый)!
+    //           Значит формула должна быть (side - rotation + 6) % 6
+    //           rotation=1, side=0 -> pieceSide=(0-1+6)%6=5 (bottomColor - фиолетовый) ✓
     function getColorAtSide(piece, side) {
-      // На позиции side (фиксированная позиция на доске) находится сторона доминошки (side - rotation + 6) % 6
+      // На позиции side доски находится сторона доминошки (side - rotation + 6) % 6
       const pieceSide = (side - piece.rotation + 6) % 6;
       // Стороны доминошки 0,1,2 = topColor, стороны 3,4,5 = bottomColor
       const isTopHalf = (pieceSide === 0 || pieceSide === 1 || pieceSide === 2);
@@ -508,6 +563,260 @@
         }
       });
       logContent.scrollTop = logContent.scrollHeight;
+    }
+    
+    function toggleDebugMode() {
+      debugMode = !debugMode;
+      const debugBtn = document.getElementById('debugBtn');
+      const logPanel = document.getElementById('logPanel');
+      
+      if (debugBtn) {
+        if (debugMode) {
+          debugBtn.style.background = '#22c55e';
+          debugBtn.textContent = '🔍 Alert (ON)';
+        } else {
+          debugBtn.style.background = '#ef4444';
+          debugBtn.textContent = '🔍 Alert';
+        }
+      }
+      
+      // Показываем/скрываем панель лога
+      if (logPanel) {
+        if (debugMode) {
+          logPanel.classList.add('visible');
+          logPanel.style.display = 'block';
+        } else {
+          logPanel.classList.remove('visible');
+          logPanel.style.display = 'none';
+        }
+      }
+      
+      console.log('Режим отладки:', debugMode ? 'ВКЛ' : 'ВЫКЛ');
+      // Перерисовываем доску, чтобы обновить курсоры
+      renderBoard();
+    }
+    
+    function logCellDebugInfo(coord, piece) {
+      if (!debugMode) return;
+      
+      const logContent = document.getElementById('logContent');
+      const logPanel = document.getElementById('logPanel');
+      
+      if (!logContent) {
+        console.error('Элемент logContent не найден!');
+        return;
+      }
+      
+      // Убеждаемся, что панель лога видна
+      if (logPanel) {
+        logPanel.style.display = 'block';
+        logPanel.style.visibility = 'visible';
+        logPanel.style.opacity = '1';
+        logPanel.classList.add('visible');
+      }
+      
+      // Очищаем предыдущий лог
+      let logText = '';
+      
+      // Заголовок
+      logText += '═══════════════════════════════════════════════════════════\n';
+      logText += '  DEBUG: ИНФОРМАЦИЯ О КЛЕТКЕ\n';
+      logText += '═══════════════════════════════════════════════════════════\n\n';
+      
+      // Координаты клетки
+      logText += '📍 КООРДИНАТЫ КЛЕТКИ:\n';
+      logText += `   Q: ${coord.q}, R: ${coord.r}, S: ${coord.s}\n`;
+      logText += `   Шестнадцатеричные координаты: (${coord.q}, ${coord.r}, ${coord.s})\n\n`;
+      
+      if (!piece) {
+        logText += '⚠️  Доминошка не выбрана!\n';
+        logContent.textContent = logText;
+        logContent.scrollTop = 0;
+        return;
+      }
+      
+      // Информация о выбранной доминошке
+      logText += '🎲 ВЫБРАННАЯ ДОМИНОШКА:\n';
+      logText += `   ID: ${piece.id}\n`;
+      logText += `   Верхний цвет: ${piece.topColor} (${COLOR_NAMES[piece.topColor]})\n`;
+      logText += `   Нижний цвет: ${piece.bottomColor} (${COLOR_NAMES[piece.bottomColor]})\n`;
+      logText += `   Поворот: ${piece.rotation} (${piece.rotation * 60}°)\n`;
+      
+      // Проверяем, отличается ли поворот от выбранного игроком
+      if (selectedPiece && selectedPiece.rotation !== piece.rotation) {
+        logText += `   ⚠️  ВНИМАНИЕ: Используется автоматически подобранный поворот!\n`;
+        logText += `      Игрок выбрал поворот: ${selectedPiece.rotation}\n`;
+        logText += `      Система использует поворот: ${piece.rotation}\n`;
+      }
+      logText += '\n';
+      
+      // Цвета на каждой стороне доминошки (на позициях доски)
+      logText += '🎨 ЦВЕТА НА ПОЗИЦИЯХ ДОСКИ (после поворота):\n';
+      for (let side = 0; side < 6; side++) {
+        const color = getColorAtSide(piece, side);
+        logText += `   Сторона ${side}: ${color} (${COLOR_NAMES[color]})\n`;
+      }
+      logText += '\n';
+      
+      // Проверяем соседей
+      const neighbors = getHexNeighbors(coord);
+      logText += `🔗 СОСЕДНИЕ КЛЕТКИ (всего: ${neighbors.length}):\n\n`;
+      
+      let hasInvalidConnection = false;
+      const invalidConnections = [];
+      let neighborCount = 0;
+      
+      for (let i = 0; i < neighbors.length; i++) {
+        const neighbor = neighbors[i];
+        const placedNeighbor = placedPieces.find(p => hexEquals(p.coord, neighbor));
+        
+        if (placedNeighbor) {
+          neighborCount++;
+          const newPieceSide = directionToSide(coord, neighbor);
+          const placedSide = directionToSide(neighbor, coord);
+          
+          const newPieceColor = getColorAtSide(piece, newPieceSide);
+          const placedColor = getColorAtSide(placedNeighbor.piece, placedSide);
+          
+          const isValid = newPieceColor === placedColor;
+          
+          logText += `   ┌─ Сосед #${i + 1} ────────────────────────────────────────────┐\n`;
+          logText += `   │ Координаты: (${neighbor.q}, ${neighbor.r}, ${neighbor.s})\n`;
+          logText += `   │\n`;
+          logText += `   │ НОВАЯ ДОМИНОШКА:\n`;
+          logText += `   │   Сторона, смотрящая на соседа: ${newPieceSide}\n`;
+          logText += `   │   Цвет на стороне ${newPieceSide}: ${newPieceColor} (${COLOR_NAMES[newPieceColor]})\n`;
+          logText += `   │\n`;
+          logText += `   │ УСТАНОВЛЕННАЯ ДОМИНОШКА:\n`;
+          logText += `   │   ID: ${placedNeighbor.piece.id}\n`;
+          logText += `   │   Верхний цвет: ${placedNeighbor.piece.topColor} (${COLOR_NAMES[placedNeighbor.piece.topColor]})\n`;
+          logText += `   │   Нижний цвет: ${placedNeighbor.piece.bottomColor} (${COLOR_NAMES[placedNeighbor.piece.bottomColor]})\n`;
+          logText += `   │   Поворот: ${placedNeighbor.piece.rotation}\n`;
+          logText += `   │   Сторона, смотрящая на новую: ${placedSide}\n`;
+          logText += `   │   Цвет на стороне ${placedSide}: ${placedColor} (${COLOR_NAMES[placedColor]})\n`;
+          logText += `   │\n`;
+          
+          if (isValid) {
+            logText += `   │ ✅ СОЕДИНЕНИЕ ВАЛИДНО: цвета совпадают\n`;
+          } else {
+            logText += `   │ ❌ СОЕДИНЕНИЕ НЕВАЛИДНО: цвета НЕ совпадают!\n`;
+            logText += `   │    ${COLOR_NAMES[newPieceColor]} ≠ ${COLOR_NAMES[placedColor]}\n`;
+            hasInvalidConnection = true;
+            invalidConnections.push({
+              neighbor: neighbor,
+              newPieceSide: newPieceSide,
+              newPieceColor: newPieceColor,
+              placedSide: placedSide,
+              placedColor: placedColor,
+              placedPiece: placedNeighbor.piece
+            });
+          }
+          
+          logText += `   │\n`;
+          logText += `   │ Цвета установленной доминошки на всех сторонах:\n`;
+          for (let side = 0; side < 6; side++) {
+            const color = getColorAtSide(placedNeighbor.piece, side);
+            const marker = (side === placedSide) ? ' ←' : '';
+            logText += `   │   Сторона ${side}: ${color} (${COLOR_NAMES[color]})${marker}\n`;
+          }
+          logText += `   └───────────────────────────────────────────────────────────┘\n\n`;
+        } else {
+          logText += `   Сосед #${i + 1}: (${neighbor.q}, ${neighbor.r}, ${neighbor.s}) - пусто\n`;
+        }
+      }
+      
+      logText += `\n📊 СТАТИСТИКА:\n`;
+      logText += `   Всего соседей: ${neighbors.length}\n`;
+      logText += `   Размещенных доминошек рядом: ${neighborCount}\n`;
+      logText += `   Валидных соединений: ${neighborCount - invalidConnections.length}\n`;
+      logText += `   Невалидных соединений: ${invalidConnections.length}\n\n`;
+      
+      // Детальная информация о невалидных соединениях
+      if (hasInvalidConnection) {
+        logText += '═══════════════════════════════════════════════════════════\n';
+        logText += '  ❌ НЕВАЛИДНЫЕ СОЕДИНЕНИЯ\n';
+        logText += '═══════════════════════════════════════════════════════════\n\n';
+        
+        invalidConnections.forEach((conn, idx) => {
+          logText += `   Невалидное соединение #${idx + 1}:\n`;
+          logText += `   ┌─────────────────────────────────────────────────────┐\n`;
+          logText += `   │ Сосед: (${conn.neighbor.q}, ${conn.neighbor.r}, ${conn.neighbor.s})\n`;
+          logText += `   │\n`;
+          logText += `   │ Новая доминошка:\n`;
+          logText += `   │   Сторона ${conn.newPieceSide}: ${conn.newPieceColor} (${COLOR_NAMES[conn.newPieceColor]})\n`;
+          logText += `   │\n`;
+          logText += `   │ Установленная доминошка:\n`;
+          logText += `   │   ID: ${conn.placedPiece.id}\n`;
+          logText += `   │   Сторона ${conn.placedSide}: ${conn.placedColor} (${COLOR_NAMES[conn.placedColor]})\n`;
+          logText += `   │   Верхний цвет: ${conn.placedPiece.topColor} (${COLOR_NAMES[conn.placedPiece.topColor]})\n`;
+          logText += `   │   Нижний цвет: ${conn.placedPiece.bottomColor} (${COLOR_NAMES[conn.placedPiece.bottomColor]})\n`;
+          logText += `   │   Поворот: ${conn.placedPiece.rotation}\n`;
+          logText += `   │\n`;
+          logText += `   │ ❌ ПРОБЛЕМА: ${COLOR_NAMES[conn.newPieceColor]} ≠ ${COLOR_NAMES[conn.placedColor]}\n`;
+          logText += `   └─────────────────────────────────────────────────────┘\n\n`;
+        });
+      }
+      
+      // Проверяем, можно ли разместить
+      const canPlace = canPlacePiece(piece, coord);
+      logText += '═══════════════════════════════════════════════════════════\n';
+      if (canPlace) {
+        logText += '  ✅ РЕЗУЛЬТАТ: Можно разместить доминошку\n';
+        if (invalidConnections.length > 0) {
+          logText += `  ⚠️  ВНИМАНИЕ: Обнаружено ${invalidConnections.length} невалидных соединений, но canPlacePiece вернула true!\n`;
+          logText += '     Это ошибка в логике проверки! Размещение должно быть запрещено.\n';
+        }
+      } else {
+        logText += '  ❌ РЕЗУЛЬТАТ: НЕЛЬЗЯ разместить доминошку\n';
+        if (neighborCount === 0) {
+          logText += '     Причина: Нет соседних размещенных доминошек\n';
+        } else if (invalidConnections.length > 0) {
+          logText += `     Причина: ${invalidConnections.length} невалидных соединений\n`;
+        } else {
+          logText += '     Причина: Неизвестная (проверьте консоль браузера)\n';
+        }
+      }
+      logText += '═══════════════════════════════════════════════════════════\n';
+      
+      // Дополнительная проверка: сравниваем результаты нашей проверки с canPlacePiece
+      if (neighborCount > 0 && invalidConnections.length === 0 && !canPlace) {
+        logText += '\n⚠️  РАСХОЖДЕНИЕ: Лог показывает валидные соединения, но canPlacePiece вернула false!\n';
+        logText += '     Возможна ошибка в функции canPlacePiece или getColorAtSide.\n';
+      }
+      
+      // Выводим в текстовое поле
+      try {
+        // Очищаем содержимое и устанавливаем текст
+        logContent.textContent = logText;
+        
+        // Прокручиваем в начало после небольшой задержки
+        setTimeout(() => {
+          logContent.scrollTop = 0;
+          if (logPanel) {
+            logPanel.scrollTop = 0;
+          }
+        }, 50);
+      } catch (error) {
+        console.error('Ошибка при выводе лога:', error);
+        alert('Ошибка при выводе лога: ' + error.message);
+      }
+      
+      // Выводим alert с краткой информацией
+      let alertMsg = `Клетка: (${coord.q}, ${coord.r}, ${coord.s})\n`;
+      alertMsg += `Доминошка: ${COLOR_NAMES[piece.topColor]} / ${COLOR_NAMES[piece.bottomColor]}, поворот: ${piece.rotation}\n\n`;
+      
+      if (invalidConnections.length > 0) {
+        alertMsg += `НЕВАЛИДНЫЕ СОЕДИНЕНИЯ:\n`;
+        invalidConnections.forEach((conn, idx) => {
+          alertMsg += `${idx + 1}. Сосед (${conn.neighbor.q}, ${conn.neighbor.r}): `;
+          alertMsg += `новая сторона ${conn.newPieceSide} (${COLOR_NAMES[conn.newPieceColor]}) `;
+          alertMsg += `≠ установленная сторона ${conn.placedSide} (${COLOR_NAMES[conn.placedColor]})\n`;
+        });
+      } else {
+        alertMsg += `Нет соседей или все соединения валидны`;
+      }
+      
+      alert(alertMsg);
     }
     
     function createRotationVisualization(piece, rotation, pieceSideColors, boardPositionColors) {
@@ -761,6 +1070,7 @@
       const neighbors = getHexNeighbors(coord);
       let hasNeighbor = false;
       
+      // Проверяем ВСЕ соседние доминошки - ВСЕ соединения должны быть валидными
       for (let i = 0; i < neighbors.length; i++) {
         const neighbor = neighbors[i];
         const placedNeighbor = placedPieces.find(p => hexEquals(p.coord, neighbor));
@@ -776,12 +1086,23 @@
           const newPieceColor = getColorAtSide(piece, newPieceSide);
           const placedColor = getColorAtSide(placedNeighbor.piece, placedSide);
           
+          // КРИТИЧНО: Если хотя бы одно соединение невалидно, размещение запрещено
           if (newPieceColor !== placedColor) {
+            // Отладочная информация
+            if (debugMode) {
+              console.error(`НЕВАЛИДНОЕ СОЕДИНЕНИЕ обнаружено в canPlacePiece:`);
+              console.error(`  Координаты новой доминошки: (${coord.q}, ${coord.r}, ${coord.s})`);
+              console.error(`  Координаты соседа: (${neighbor.q}, ${neighbor.r}, ${neighbor.s})`);
+              console.error(`  Сторона новой доминошки: ${newPieceSide}, цвет: ${newPieceColor} (${COLOR_NAMES[newPieceColor]})`);
+              console.error(`  Сторона установленной доминошки: ${placedSide}, цвет: ${placedColor} (${COLOR_NAMES[placedColor]})`);
+              console.error(`  Цвета НЕ совпадают: ${COLOR_NAMES[newPieceColor]} !== ${COLOR_NAMES[placedColor]}`);
+            }
             return false;
           }
         }
       }
       
+      // Должен быть хотя бы один сосед для размещения
       return hasNeighbor;
     }
     
@@ -845,11 +1166,18 @@
       const svg = document.getElementById('gameBoard');
       svg.innerHTML = '';
       
-      // Лог полностью отключен - всегда скрыт
+      // Показываем/скрываем панель лога в зависимости от режима отладки
       const logPanel = document.getElementById('logPanel');
       if (logPanel) {
-        logPanel.style.display = 'none';
-        logPanel.style.visibility = 'hidden';
+        if (debugMode) {
+          logPanel.style.display = 'block';
+          logPanel.style.visibility = 'visible';
+          logPanel.classList.add('visible');
+        } else {
+          logPanel.style.display = 'none';
+          logPanel.style.visibility = 'hidden';
+          logPanel.classList.remove('visible');
+        }
       }
       
       // Вычисляем границы и центр для автоматического масштабирования
@@ -953,13 +1281,26 @@
         polygon.setAttribute('stroke', '#cbd5e1');
         polygon.setAttribute('stroke-width', '2');
         polygon.setAttribute('stroke-dasharray', '4,4');
-        polygon.style.cursor = canPlace ? 'pointer' : 'not-allowed';
+        polygon.style.cursor = canPlace ? 'pointer' : (debugMode ? 'crosshair' : 'not-allowed');
+        
+        // В режиме отладки добавляем обработчик клика для всех позиций
+        if (debugMode && selectedPiece) {
+          polygon.addEventListener('click', () => {
+            logCellDebugInfo(coord, selectedPiece);
+          });
+        }
         
         if (canPlace) {
           // Сохраняем валидный поворот для использования при размещении
           const storedValidRotation = validRotation;
           polygon.addEventListener('click', () => {
             if (!selectedPiece) return;
+            
+            // В режиме отладки логируем информацию вместо размещения
+            if (debugMode) {
+              logCellDebugInfo(coord, { ...selectedPiece, rotation: storedValidRotation });
+              return;
+            }
             
             // Если найден другой валидный поворот, обновляем его в selectedPiece и оригинальной доминошке
             if (storedValidRotation !== null && storedValidRotation !== selectedPiece.rotation) {
@@ -1043,6 +1384,12 @@
             e.stopPropagation();
             if (!selectedPiece) return;
             
+            // В режиме отладки логируем информацию вместо размещения
+            if (debugMode) {
+              logCellDebugInfo(coord, { ...selectedPiece, rotation: validRotation });
+              return;
+            }
+            
             // Если найден другой валидный поворот, обновляем его в selectedPiece и оригинальной доминошке
             if (validRotation !== null && validRotation !== selectedPiece.rotation) {
               // Находим оригинальную доминошку в массиве игрока и обновляем её поворот
@@ -1076,6 +1423,53 @@
         
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         g.setAttribute('transform', `translate(${centerX + x}, ${centerY + y})`);
+        
+        // В режиме отладки добавляем обработчик клика на размещенные доминошки
+        if (debugMode) {
+          g.style.cursor = 'crosshair';
+          g.addEventListener('click', () => {
+            console.log('=== DEBUG: Информация о размещенной доминошке ===');
+            console.log('Координаты:', placed.coord);
+            console.log('Доминошка:');
+            console.log('  ID:', placed.piece.id);
+            console.log('  topColor:', placed.piece.topColor, `(${COLOR_NAMES[placed.piece.topColor]})`);
+            console.log('  bottomColor:', placed.piece.bottomColor, `(${COLOR_NAMES[placed.piece.bottomColor]})`);
+            console.log('  rotation:', placed.piece.rotation);
+            console.log('Цвета на позициях доски:');
+            for (let side = 0; side < 6; side++) {
+              const color = getColorAtSide(placed.piece, side);
+              console.log(`  Сторона ${side}: ${color} (${COLOR_NAMES[color]})`);
+            }
+            
+            // Показываем соседей
+            const neighbors = getHexNeighbors(placed.coord);
+            console.log('Соседи:');
+            neighbors.forEach((neighbor, idx) => {
+              const neighborPiece = placedPieces.find(p => hexEquals(p.coord, neighbor));
+              if (neighborPiece) {
+                const thisSide = directionToSide(placed.coord, neighbor);
+                const neighborSide = directionToSide(neighbor, placed.coord);
+                const thisColor = getColorAtSide(placed.piece, thisSide);
+                const neighborColor = getColorAtSide(neighborPiece.piece, neighborSide);
+                console.log(`  Сосед ${idx} (${neighbor.q}, ${neighbor.r}): сторона ${thisSide} (${COLOR_NAMES[thisColor]}) = сторона ${neighborSide} (${COLOR_NAMES[neighborColor]})`);
+              } else {
+                console.log(`  Сосед ${idx} (${neighbor.q}, ${neighbor.r}): пусто`);
+              }
+            });
+            console.log('=== КОНЕЦ DEBUG ===');
+            
+            let alertMsg = `Размещенная доминошка:\n`;
+            alertMsg += `Координаты: (${placed.coord.q}, ${placed.coord.r}, ${placed.coord.s})\n`;
+            alertMsg += `Цвета: ${COLOR_NAMES[placed.piece.topColor]} / ${COLOR_NAMES[placed.piece.bottomColor]}\n`;
+            alertMsg += `Поворот: ${placed.piece.rotation}\n\n`;
+            alertMsg += `Цвета на сторонах:\n`;
+            for (let side = 0; side < 6; side++) {
+              const color = getColorAtSide(placed.piece, side);
+              alertMsg += `  Сторона ${side}: ${COLOR_NAMES[color]}\n`;
+            }
+            alert(alertMsg);
+          });
+        }
         
         const rotatedG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         rotatedG.setAttribute('transform', `rotate(${rotation})`);
@@ -1574,6 +1968,23 @@
       const player0Empty = players[0].pieces.length === 0;
       const player1Empty = players[1].pieces.length === 0;
       
+      // В режиме одного игрока проверяем только первого игрока
+      if (gameMode === 'single') {
+        if (allBazaarsEmpty && player0Empty) {
+          gameOver = true;
+          const message = `🎉 Поздравляем! Вы выложили все доминошки!\n\nВаши очки: ${players[0].score}`;
+          setTimeout(() => {
+            alert(message);
+            if (confirm('Хотите начать новую игру?')) {
+              resetGame();
+            }
+          }, 300);
+          return true;
+        }
+        return false;
+      }
+      
+      // Для режимов с несколькими игроками
       if (allBazaarsEmpty && (player0Empty || player1Empty)) {
         gameOver = true;
         
@@ -1828,8 +2239,12 @@
       isBotThinking = false;
       gameOver = false; // Сбрасываем флаг окончания игры
       
-      // Скрываем панель лога в игровом режиме
-      document.getElementById('logPanel').style.display = 'none';
+      // Скрываем панель лога в игровом режиме (если не включен режим отладки)
+      const logPanel = document.getElementById('logPanel');
+      if (logPanel && !debugMode) {
+        logPanel.style.display = 'none';
+        logPanel.classList.remove('visible');
+      }
       
       // Обновляем отображение текущего игрока
       updateCurrentPlayerDisplay();
@@ -2192,24 +2607,50 @@
     
     // Инициализация
     window.onload = () => {
-      // Убеждаемся, что лог скрыт при загрузке
-      document.getElementById('logPanel').style.display = 'none';
-      
-      // Обработчик переключения режима игры
-      const modeSelect = document.getElementById('gameMode');
-      if (modeSelect) {
-        modeSelect.addEventListener('change', onGameModeChange);
-      }
-      
-      // Обработчики кнопок базара для обоих игроков
-      for (let i = 0; i < 2; i++) {
-        const bazaarBtn = document.getElementById(`bazaarBtn${i}`);
-        if (bazaarBtn) {
-          bazaarBtn.addEventListener('click', () => takeFromBazaar(i));
+      try {
+        // Убеждаемся, что лог скрыт при загрузке (если не включен режим отладки)
+        const logPanel = document.getElementById('logPanel');
+        if (logPanel && !debugMode) {
+          logPanel.style.display = 'none';
+          logPanel.classList.remove('visible');
         }
+        
+        // Обработчик переключения режима игры
+        const modeSelect = document.getElementById('gameMode');
+        if (modeSelect) {
+          modeSelect.addEventListener('change', onGameModeChange);
+        }
+        
+        // Обработчики кнопок базара для обоих игроков
+        for (let i = 0; i < 2; i++) {
+          const bazaarBtn = document.getElementById(`bazaarBtn${i}`);
+          if (bazaarBtn) {
+            bazaarBtn.addEventListener('click', () => takeFromBazaar(i));
+          }
+        }
+        
+        // Обработчик кнопки сброса
+        const resetBtn = document.getElementById('resetBtn');
+        if (resetBtn) {
+          resetBtn.addEventListener('click', resetGame);
+        }
+        
+        // Обработчик кнопки отладки
+        const debugBtn = document.getElementById('debugBtn');
+        if (debugBtn) {
+          debugBtn.addEventListener('click', toggleDebugMode);
+        }
+        
+        // Проверяем, что функция resetGame определена
+        if (typeof resetGame === 'function') {
+          resetGame();
+        } else {
+          console.error('Ошибка: функция resetGame не определена!');
+        }
+      } catch (error) {
+        console.error('Ошибка при инициализации:', error);
+        alert('Ошибка загрузки игры. Проверьте консоль браузера (F12)');
       }
-      
-      resetGame();
     };
   </script>
 </body>
