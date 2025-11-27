@@ -375,6 +375,11 @@
           <div class="log-title">Лог (отладка)</div>
           <div class="log-content" id="logContent">Лог пуст. Включите режим отладки и кликните на клетку.</div>
         </div>
+        
+        <div class="log-panel" id="onlineLogPanel" style="display: none; margin-top: 20px;">
+          <div class="log-title">📡 Онлайн активность</div>
+          <div class="log-content" id="onlineLogContent" style="max-height: 200px; font-size: 11px;">Ожидание подключения...</div>
+        </div>
       </div>
       
       <!-- Игрок 2 (справа) -->
@@ -439,6 +444,35 @@
     let myPeerId = null;
     let isHost = false; // Является ли этот игрок хостом (создал комнату)
     let onlinePlayerId = 0; // ID этого игрока в онлайн режиме (0 или 1)
+    
+    // Функция для логирования онлайн активности
+    function addOnlineLog(message, type = 'info') {
+      const onlineLogPanel = document.getElementById('onlineLogPanel');
+      const onlineLogContent = document.getElementById('onlineLogContent');
+      
+      if (!onlineLogPanel || !onlineLogContent) return;
+      
+      const time = new Date().toLocaleTimeString();
+      const playerName = isHost ? '🎮 ХОСТ (Игрок 1)' : '👤 ВТОРОЙ ИГРОК';
+      const typeIcon = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'send' ? '📤' : type === 'receive' ? '📥' : 'ℹ️';
+      const typeColor = type === 'error' ? '#ef4444' : type === 'success' ? '#22c55e' : type === 'send' ? '#3b82f6' : type === 'receive' ? '#8b5cf6' : '#64748b';
+      
+      const logEntry = document.createElement('div');
+      logEntry.style.marginBottom = '4px';
+      logEntry.style.padding = '4px 8px';
+      logEntry.style.borderLeft = `3px solid ${typeColor}`;
+      logEntry.style.background = '#f8fafc';
+      logEntry.innerHTML = `<span style="color: #64748b; font-size: 10px;">[${time}]</span> <span style="font-weight: bold; color: ${typeColor};">${typeIcon} ${playerName}:</span> ${message}`;
+      
+      onlineLogContent.insertBefore(logEntry, onlineLogContent.firstChild);
+      
+      // Ограничиваем количество записей (оставляем последние 50)
+      while (onlineLogContent.children.length > 50) {
+        onlineLogContent.removeChild(onlineLogContent.lastChild);
+      }
+      
+      console.log(`[Онлайн лог] ${playerName}: ${message}`);
+    }
     
     // Утилиты для hex координат
     function hexToPixel(q, r) {
@@ -2517,10 +2551,12 @@
           updateServerStatus(true);
           updateMyPeerId(id);
           console.log('PeerJS подключен, мой ID:', id);
+          addOnlineLog(`PeerJS подключен, мой ID: ${id}`, 'success');
         });
         
         peer.on('connection', (connection) => {
           console.log('Получено входящее соединение от:', connection.peer);
+          addOnlineLog(`Входящее соединение от: ${connection.peer}`, 'receive');
           conn = connection;
           
           // Устанавливаем обработчики до события open
@@ -2532,6 +2568,7 @@
           connection.on('open', () => {
             updatePeerStatus(true);
             console.log('Соединение с игроком установлено (хост):', connection.peer);
+            addOnlineLog(`✅ Соединение установлено! ID второго игрока: ${connection.peer}`, 'success');
             
             // Обновляем статус подключения
             const peerStatusEl = document.getElementById('peerStatus');
@@ -2548,6 +2585,7 @@
             // Отправляем текущее состояние игры новому игроку
             setTimeout(() => {
               console.log('Хост отправляет начальное состояние игры');
+              addOnlineLog(`Отправка начального состояния игры (${placedPieces.length} доминошек на доске)`, 'send');
               sendOnlineMessage({
                 type: 'gameState',
                 placedPieces: placedPieces,
@@ -2561,11 +2599,13 @@
           connection.on('close', () => {
             updatePeerStatus(false);
             conn = null;
+            addOnlineLog('❌ Соперник отключился', 'error');
             alert('Соперник отключился');
           });
           
           connection.on('error', (err) => {
             console.error('Ошибка соединения:', err);
+            addOnlineLog(`❌ Ошибка соединения: ${err.message || err}`, 'error');
             updatePeerStatus(false);
           });
         });
@@ -2614,6 +2654,7 @@
           isHost = false;
           onlinePlayerId = 1; // Подключающийся игрок становится вторым
           console.log('Подключились к игроку:', peerId);
+          addOnlineLog(`✅ Подключились к хосту! ID хоста: ${peerId}`, 'success');
           
           // Применяем стиль для панели первого игрока (он становится серым для второго)
           const playerPanel0 = document.getElementById('playerPanel0');
@@ -2645,6 +2686,7 @@
           // Запрашиваем состояние игры у хоста
           setTimeout(() => {
             console.log('Второй игрок запрашивает состояние игры');
+            addOnlineLog('Запрос состояния игры у хоста...', 'send');
             sendOnlineMessage({ type: 'requestState' });
           }, 200);
         });
@@ -2674,24 +2716,33 @@
     function sendOnlineMessage(data) {
       if (conn && conn.open) {
         console.log('Отправка сообщения:', data.type, data);
+        addOnlineLog(`Отправка: ${data.type}`, 'send');
+        if (data.type === 'gameState') {
+          addOnlineLog(`  → Размещено доминошек: ${data.placedPieces?.length || 0}, Игроков: ${data.players?.length || 0}`, 'send');
+        }
         try {
           conn.send(data);
           console.log('Сообщение отправлено успешно');
+          addOnlineLog(`Сообщение ${data.type} отправлено успешно`, 'success');
         } catch (error) {
           console.error('Ошибка отправки сообщения:', error);
+          addOnlineLog(`ОШИБКА отправки: ${error.message}`, 'error');
           alert('Ошибка отправки сообщения: ' + error.message);
         }
       } else {
-        console.warn('Соединение не установлено, не могу отправить сообщение', {
-          conn: !!conn,
-          open: conn ? conn.open : false
-        });
+        const errorMsg = `Соединение не установлено! conn: ${!!conn}, open: ${conn ? conn.open : false}`;
+        console.warn(errorMsg);
+        addOnlineLog(errorMsg, 'error');
         alert('Соединение не установлено! Проверьте подключение.');
       }
     }
     
     function handleOnlineMessage(data) {
       console.log('Получено сообщение:', data);
+      addOnlineLog(`Получено: ${data.type}`, 'receive');
+      if (data.type === 'gameState') {
+        addOnlineLog(`  ← Размещено доминошек: ${data.placedPieces?.length || 0}, Игроков: ${data.players?.length || 0}`, 'receive');
+      }
       
       switch (data.type) {
         case 'peerConnected':
@@ -2712,8 +2763,10 @@
         case 'requestSync':
           // Запрос на принудительную синхронизацию от второго игрока
           console.log('Получен запрос на синхронизацию', { isHost, conn: !!conn, connOpen: conn ? conn.open : false });
+          addOnlineLog(`Запрос синхронизации от второго игрока`, 'receive');
           if (isHost) {
             console.log('Хост отправляет состояние игры второму игроку');
+            addOnlineLog(`Хост отправляет состояние игры (${placedPieces.length} доминошек на доске)`, 'send');
             console.log('Текущее состояние:', {
               placedPiecesCount: placedPieces.length,
               players: players.map(p => ({ name: p.name, piecesCount: p.pieces.length, bazaarCount: p.bazaarPieces.length, score: p.score })),
@@ -2731,12 +2784,15 @@
             }, 100);
           } else {
             console.warn('Запрос на синхронизацию получен не хостом!');
+            addOnlineLog('⚠️ Запрос синхронизации получен не хостом!', 'error');
           }
           break;
           
         case 'requestState':
           // Отправляем текущее состояние игры
+          addOnlineLog(`Запрос состояния игры`, 'receive');
           if (isHost) {
+            addOnlineLog(`Хост отправляет состояние игры (${placedPieces.length} доминошек)`, 'send');
             sendOnlineMessage({
               type: 'gameState',
               placedPieces: placedPieces,
@@ -2744,6 +2800,8 @@
               currentPlayer: currentPlayer,
               startPiece: placedPieces[0] ? placedPieces[0].piece : null
             });
+          } else {
+            addOnlineLog('⚠️ Запрос состояния получен не хостом!', 'error');
           }
           break;
           
@@ -2754,6 +2812,7 @@
             placedPiecesCount: data.placedPieces?.length || 0,
             playersCount: data.players?.length || 0
           });
+          addOnlineLog(`✅ Получено состояние игры: ${data.placedPieces?.length || 0} доминошек на доске`, 'success');
           
           if (!isHost) {
             // Сохраняем центральную доминошку и размещенные доминошки
@@ -2835,9 +2894,11 @@
             updateBazaarButtons();
             
             console.log('Состояние игры синхронизировано успешно');
+            addOnlineLog(`✅ Синхронизация завершена! Доска обновлена.`, 'success');
             alert('Игра синхронизирована! Вы готовы играть.');
           } else {
             console.warn('Состояние игры получено хостом, игнорируем');
+            addOnlineLog('⚠️ Состояние игры получено хостом (игнорируем)', 'error');
           }
           break;
           
@@ -2974,11 +3035,13 @@
             conn: !!conn,
             connOpen: conn ? conn.open : false
           });
+          addOnlineLog('🔘 Нажата кнопка "Готов"', 'info');
           
           if (!isHost) {
             if (conn && conn.open) {
               // Запрашиваем синхронизацию у хоста
               console.log('Отправка запроса на синхронизацию...');
+              addOnlineLog('Запрос принудительной синхронизации...', 'send');
               sendOnlineMessage({ type: 'requestSync' });
               readyBtn.textContent = 'Синхронизация...';
               readyBtn.disabled = true;
@@ -2988,10 +3051,13 @@
                 if (readyBtn.disabled) {
                   readyBtn.textContent = 'Готов';
                   readyBtn.disabled = false;
+                  addOnlineLog('⏱️ Таймаут синхронизации (5 сек)', 'error');
                 }
               }, 5000);
             } else {
-              alert('Соединение не установлено! Проверьте подключение к первому игроку.');
+              const errorMsg = 'Соединение не установлено! Проверьте подключение к первому игроку.';
+              alert(errorMsg);
+              addOnlineLog(`❌ ${errorMsg}`, 'error');
               console.error('Соединение не открыто:', {
                 conn: !!conn,
                 open: conn ? conn.open : false
@@ -2999,6 +3065,7 @@
             }
           } else {
             alert('Вы хост, синхронизация не требуется.');
+            addOnlineLog('⚠️ Хост не может запросить синхронизацию', 'error');
           }
         };
       }
@@ -3006,8 +3073,20 @@
     
     function showOnlineUI(show) {
       const onlineStatus = document.getElementById('onlineStatus');
+      const onlineLogPanel = document.getElementById('onlineLogPanel');
+      
       if (onlineStatus) {
         onlineStatus.style.display = show ? 'block' : 'none';
+      }
+      
+      if (onlineLogPanel) {
+        onlineLogPanel.style.display = show ? 'block' : 'none';
+        if (show) {
+          const onlineLogContent = document.getElementById('onlineLogContent');
+          if (onlineLogContent) {
+            onlineLogContent.innerHTML = 'Ожидание подключения...';
+          }
+        }
       }
     }
     
