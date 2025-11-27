@@ -309,7 +309,10 @@
   <div class="container">
     <div class="header">
       <div>
-        <div class="title">Гексагональное Домино</div>
+        <div class="title" style="display: flex; align-items: baseline; gap: 8px;">
+          <span>Гексагональное Домино</span>
+          <span id="gameVersion" style="font-size: 10px; color: #94a3b8; font-weight: normal; font-family: monospace;"></span>
+        </div>
         <div style="font-size: 14px; color: #64748b;">Соединяйте доминошки цвет к цвету</div>
       </div>
       <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
@@ -3262,6 +3265,15 @@
     // Инициализация
     window.onload = () => {
       try {
+        // Устанавливаем версию игры (timestamp загрузки для отслеживания обновлений)
+        const gameVersionEl = document.getElementById('gameVersion');
+        if (gameVersionEl) {
+          const loadTime = new Date();
+          const versionString = `v${loadTime.getHours().toString().padStart(2, '0')}:${loadTime.getMinutes().toString().padStart(2, '0')}:${loadTime.getSeconds().toString().padStart(2, '0')}`;
+          gameVersionEl.textContent = versionString;
+          gameVersionEl.title = `Версия загружена: ${loadTime.toLocaleString('ru-RU')}`;
+        }
+        
         // Убеждаемся, что лог скрыт при загрузке (если не включен режим отладки)
         const logPanel = document.getElementById('logPanel');
         if (logPanel && !debugMode) {
