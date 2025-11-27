@@ -2062,7 +2062,9 @@
           coord: coord,
           piece: pieceToPlace,
           playerId: currentPlayer,
-          playerPieces: currentPlayerObj.pieces
+          playerPieces: currentPlayerObj.pieces,
+          playerScore: currentPlayerObj.score,
+          playerBazaarPieces: currentPlayerObj.bazaarPieces
         });
       }
       
@@ -2122,7 +2124,13 @@
       }
       
       // Для режимов с несколькими игроками
-      if (allBazaarsEmpty && (player0Empty || player1Empty)) {
+      // Игра заканчивается если:
+      // 1. Базары пусты И оба игрока выложили все доминошки
+      // 2. ИЛИ базары пусты И оба игрока не могут сделать ход (нет валидных ходов)
+      const bothPlayersEmpty = player0Empty && player1Empty;
+      const bothPlayersCannotMove = !player0CanMove && !player1CanMove;
+      
+      if (allBazaarsEmpty && (bothPlayersEmpty || bothPlayersCannotMove)) {
         gameOver = true;
         
         // Игра окончена, определяем победителя
@@ -2142,8 +2150,13 @@
           message = `Победитель: ${players[1].name}! Выложены все доминошки.`;
         }
         
-        // Если ничья, определяем по очкам, затем по количеству оставшихся доминошек
+        // Если ничья или оба не могут сделать ход, определяем по очкам, затем по количеству оставшихся доминошек
         if (!winner && allBazaarsEmpty) {
+          // Если оба не могут сделать ход, это тоже конец игры
+          if (bothPlayersCannotMove && !bothPlayersEmpty) {
+            message = 'Игра окончена! Базары пусты и оба игрока не могут сделать ход.\n';
+          }
+          
           if (players[0].score > players[1].score) {
             winner = 0;
             message = `Победитель: ${players[0].name}! Больше очков (${players[0].score} vs ${players[1].score}).`;
@@ -2503,7 +2516,8 @@
           type: 'bazaarTaken',
           playerId: playerId,
           playerPieces: player.pieces,
-          playerBazaarPieces: player.bazaarPieces
+          playerBazaarPieces: player.bazaarPieces,
+          playerScore: player.score
         });
       }
       
@@ -3054,11 +3068,14 @@
           const { coord, piece } = data;
           placedPieces.push({ coord, piece });
           
-          // Обновляем доминошки и очки соперника
+          // Обновляем доминошки, очки и базар соперника
           if (data.playerId !== undefined) {
             players[data.playerId].pieces = data.playerPieces || [];
             if (data.playerScore !== undefined) {
               players[data.playerId].score = data.playerScore;
+            }
+            if (data.playerBazaarPieces !== undefined) {
+              players[data.playerId].bazaarPieces = data.playerBazaarPieces || [];
             }
           }
           
@@ -3083,12 +3100,16 @@
           if (data.playerId !== undefined) {
             players[data.playerId].pieces = data.playerPieces || [];
             players[data.playerId].bazaarPieces = data.playerBazaarPieces || [];
+            if (data.playerScore !== undefined) {
+              players[data.playerId].score = data.playerScore;
+            }
             // НЕ переключаем ход - соперник должен иметь возможность походить после взятия из базара
             // currentPlayer НЕ МЕНЯЕТСЯ!
             console.log(`bazaarTaken: currentPlayer ПОСЛЕ обновления=${currentPlayer}, НЕ ДОЛЖЕН ИЗМЕНИТЬСЯ`);
             renderAvailablePieces();
             updateBazaarButtons();
             updateCurrentPlayerDisplay();
+            updateScoresDisplay();
           }
           break;
       }
