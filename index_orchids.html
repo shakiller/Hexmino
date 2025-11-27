@@ -2521,9 +2521,17 @@
         const count = document.getElementById(`bazaarCount${i}`);
         if (btn && count) {
           count.textContent = player.bazaarPieces.length;
-          btn.disabled = player.bazaarPieces.length === 0 || i !== currentPlayer;
-          btn.style.opacity = (player.bazaarPieces.length === 0 || i !== currentPlayer) ? '0.5' : '1';
-          btn.style.cursor = (player.bazaarPieces.length === 0 || i !== currentPlayer) ? 'not-allowed' : 'pointer';
+          
+          // Кнопка активна только если:
+          // 1. Это текущий игрок (i === currentPlayer)
+          // 2. У этого игрока есть доминошки в базаре (player.bazaarPieces.length > 0)
+          const isCurrentPlayer = (i === currentPlayer);
+          const hasBazaarPieces = player.bazaarPieces.length > 0;
+          const shouldBeEnabled = isCurrentPlayer && hasBazaarPieces;
+          
+          btn.disabled = !shouldBeEnabled;
+          btn.style.opacity = shouldBeEnabled ? '1' : '0.5';
+          btn.style.cursor = shouldBeEnabled ? 'pointer' : 'not-allowed';
         }
       }
     }
@@ -2741,12 +2749,12 @@
               peer.on('error', (altErr) => {
                 console.error('Ошибка альтернативного сервера:', altErr);
                 addOnlineLog(`❌ Альтернативный сервер тоже не работает: ${altErr.type || altErr.message}`, 'error');
-                alert('Не удалось подключиться к серверам PeerJS. Проверьте подключение к интернету.');
+                addOnlineLog('❌ Не удалось подключиться к серверам PeerJS. Проверьте подключение к интернету.', 'error');
               });
             } catch (e) {
               console.error('Не удалось подключиться к альтернативному серверу:', e);
               addOnlineLog(`❌ Критическая ошибка: ${e.message}`, 'error');
-              alert('Не удалось подключиться к серверам PeerJS. Проверьте подключение к интернету.');
+              addOnlineLog('❌ Не удалось подключиться к серверам PeerJS. Проверьте подключение к интернету.', 'error');
             }
           } else {
             addOnlineLog(`❌ Неизвестная ошибка: ${err.type || err.message || err}`, 'error');
@@ -2761,7 +2769,7 @@
     
     function connectToPeer(peerId) {
       if (!peer || !peer.open) {
-        alert('Сервер недоступен. Подождите подключения.');
+        addOnlineLog('❌ Сервер недоступен. Подождите подключения.', 'error');
         return;
       }
       
@@ -3013,8 +3021,7 @@
             updateBazaarButtons();
             
             console.log('Состояние игры синхронизировано успешно');
-            addOnlineLog(`✅ Синхронизация завершена! Доска обновлена.`, 'success');
-            alert('Игра синхронизирована! Вы готовы играть.');
+            addOnlineLog(`✅ Синхронизация завершена! Доска обновлена. Вы готовы играть!`, 'success');
           } else {
             console.warn('Состояние игры получено хостом, игнорируем');
             addOnlineLog('⚠️ Состояние игры получено хостом (игнорируем)', 'error');
@@ -3128,7 +3135,7 @@
           }).catch(err => {
             console.error('Ошибка копирования:', err);
             addOnlineLog(`❌ Ошибка копирования ID: ${err.message}`, 'error');
-            alert('Не удалось скопировать ID. ID: ' + id);
+            addOnlineLog(`ID для копирования: ${id}`, 'info');
           });
         };
       }
@@ -3144,7 +3151,7 @@
           if (peerId) {
             connectToPeer(peerId);
           } else {
-            alert('Введите ID соперника');
+            addOnlineLog('⚠️ Введите ID соперника', 'error');
           }
         };
       }
@@ -3178,7 +3185,6 @@
               }, 5000);
             } else {
               const errorMsg = 'Соединение не установлено! Проверьте подключение к первому игроку.';
-              alert(errorMsg);
               addOnlineLog(`❌ ${errorMsg}`, 'error');
               console.error('Соединение не открыто:', {
                 conn: !!conn,
@@ -3186,8 +3192,7 @@
               });
             }
           } else {
-            alert('Вы хост, синхронизация не требуется.');
-            addOnlineLog('⚠️ Хост не может запросить синхронизацию', 'error');
+            addOnlineLog('⚠️ Вы хост, синхронизация не требуется.', 'error');
           }
         };
       }
