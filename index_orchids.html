@@ -2537,9 +2537,10 @@
       }
       
       try {
-        // Создаём Peer с случайным ID
+        addOnlineLog('🔄 Попытка подключения к серверу PeerJS...', 'info');
+        // Создаём Peer с случайным ID - используем рабочий сервер
         peer = new Peer({
-          host: 'peerjs-server.herokuapp.com',
+          host: '0.peerjs.com',
           port: 443,
           path: '/',
           secure: true,
@@ -2644,25 +2645,105 @@
         
         peer.on('error', (err) => {
           console.error('Ошибка PeerJS:', err);
+          addOnlineLog(`❌ Ошибка PeerJS: ${err.type || err.message || err}`, 'error');
           updateServerStatus(false);
           
-          if (err.type === 'server-error') {
+          if (err.type === 'server-error' || err.type === 'network' || err.message?.includes('404')) {
+            addOnlineLog('🔄 Попытка подключения к альтернативному серверу...', 'info');
             // Пробуем альтернативный сервер
             try {
+              if (peer) {
+                peer.destroy();
+              }
               peer = new Peer({
-                host: '0.peerjs.com',
+                host: 'peerjs.com',
                 port: 443,
                 path: '/',
-                secure: true
+                secure: true,
+                debug: 2
               });
+              
               peer.on('open', (id) => {
                 myPeerId = id;
                 updateServerStatus(true);
                 updateMyPeerId(id);
+                addOnlineLog(`✅ Подключено к альтернативному серверу, мой ID: ${id}`, 'success');
+              });
+              
+              // Устанавливаем обработчик соединения для альтернативного сервера
+              peer.on('connection', (connection) => {
+                console.log('Получено входящее соединение от (альтернативный сервер):', connection.peer);
+                addOnlineLog(`📥 Входящее соединение от: ${connection.peer}`, 'receive');
+                addOnlineLog(`Состояние соединения: open=${connection.open}`, 'info');
+                
+                conn = connection;
+                
+                connection.on('data', (data) => {
+                  console.log('Хост получил данные от второго игрока:', data.type, data);
+                  addOnlineLog(`📥 Получены данные: ${data.type}`, 'receive');
+                  handleOnlineMessage(data);
+                });
+                
+                if (connection.open) {
+                  updatePeerStatus(true);
+                  addOnlineLog(`✅ Соединение установлено! ID второго игрока: ${connection.peer}`, 'success');
+                  alert('Игрок подключился! Игра синхронизируется...');
+                  
+                  setTimeout(() => {
+                    addOnlineLog(`Отправка начального состояния игры (${placedPieces.length} доминошек на доске)`, 'send');
+                    sendOnlineMessage({
+                      type: 'gameState',
+                      placedPieces: placedPieces,
+                      players: players,
+                      currentPlayer: currentPlayer,
+                      startPiece: placedPieces[0] ? placedPieces[0].piece : null
+                    });
+                  }, 100);
+                } else {
+                  connection.on('open', () => {
+                    updatePeerStatus(true);
+                    addOnlineLog(`✅ Соединение установлено! ID второго игрока: ${connection.peer}`, 'success');
+                    alert('Игрок подключился! Игра синхронизируется...');
+                    
+                    setTimeout(() => {
+                      addOnlineLog(`Отправка начального состояния игры (${placedPieces.length} доминошек на доске)`, 'send');
+                      sendOnlineMessage({
+                        type: 'gameState',
+                        placedPieces: placedPieces,
+                        players: players,
+                        currentPlayer: currentPlayer,
+                        startPiece: placedPieces[0] ? placedPieces[0].piece : null
+                      });
+                    }, 100);
+                  });
+                }
+                
+                connection.on('close', () => {
+                  updatePeerStatus(false);
+                  conn = null;
+                  addOnlineLog('❌ Соперник отключился', 'error');
+                  alert('Соперник отключился');
+                });
+                
+                connection.on('error', (err) => {
+                  console.error('Ошибка соединения:', err);
+                  addOnlineLog(`❌ Ошибка соединения: ${err.message || err}`, 'error');
+                  updatePeerStatus(false);
+                });
+              });
+              
+              peer.on('error', (altErr) => {
+                console.error('Ошибка альтернативного сервера:', altErr);
+                addOnlineLog(`❌ Альтернативный сервер тоже не работает: ${altErr.type || altErr.message}`, 'error');
+                alert('Не удалось подключиться к серверам PeerJS. Проверьте подключение к интернету.');
               });
             } catch (e) {
               console.error('Не удалось подключиться к альтернативному серверу:', e);
+              addOnlineLog(`❌ Критическая ошибка: ${e.message}`, 'error');
+              alert('Не удалось подключиться к серверам PeerJS. Проверьте подключение к интернету.');
             }
+          } else {
+            addOnlineLog(`❌ Неизвестная ошибка: ${err.type || err.message || err}`, 'error');
           }
         });
         
