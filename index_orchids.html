@@ -2185,7 +2185,10 @@
         if (gameMode === 'single') {
           display.textContent = 'Ваш ход';
         } else {
-          display.textContent = players[currentPlayer].name + (players[currentPlayer].isBot ? ' (Бот)' : '');
+          const playerName = players[currentPlayer]?.name || 'Неизвестно';
+          const botSuffix = players[currentPlayer]?.isBot ? ' (Бот)' : '';
+          display.textContent = playerName + botSuffix;
+          console.log(`updateCurrentPlayerDisplay: currentPlayer=${currentPlayer}, name=${playerName}`);
         }
       }
     }
@@ -2474,12 +2477,15 @@
     function takeFromBazaar(playerId) {
       // Блокируем взятие из базара для неактивного игрока
       if (playerId !== currentPlayer) {
+        console.log(`takeFromBazaar: блокировка - playerId=${playerId}, currentPlayer=${currentPlayer}`);
         return;
       }
       
+      console.log(`takeFromBazaar: начало - playerId=${playerId}, currentPlayer=${currentPlayer}`);
+      
       const player = players[playerId];
       if (player.bazaarPieces.length === 0) {
-        alert('Базар пуст!');
+        addOnlineLog('⚠️ Базар пуст!', 'error');
         return;
       }
       
@@ -2488,6 +2494,8 @@
       const piece = player.bazaarPieces.splice(randomIndex, 1)[0];
       piece.rotation = 0;
       player.pieces.push(piece);
+      
+      console.log(`takeFromBazaar: взята доминошка, currentPlayer ДО обновлений=${currentPlayer}`);
       
       // Отправляем информацию о взятии из базара в онлайн режиме
       if (gameMode === 'online' && conn && conn.open) {
@@ -2501,12 +2509,16 @@
       
       // НЕ переключаем ход после взятия из базара - игрок должен иметь возможность походить
       // Ход переключится только после размещения доминошки
+      // currentPlayer НЕ МЕНЯЕТСЯ!
       
       // Проверяем окончание игры
       checkGameEnd();
       
       renderAvailablePieces();
       updateBazaarButtons();
+      updateCurrentPlayerDisplay();
+      
+      console.log(`takeFromBazaar: конец - currentPlayer ПОСЛЕ обновлений=${currentPlayer}, должен остаться ${playerId}`);
       
       // Бот может взять из базара и сразу попробовать походить
       if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking && !gameOver) {
@@ -3067,10 +3079,13 @@
           
         case 'bazaarTaken':
           // Соперник взял из базара
+          console.log(`bazaarTaken получено: playerId=${data.playerId}, currentPlayer ДО=${currentPlayer}`);
           if (data.playerId !== undefined) {
             players[data.playerId].pieces = data.playerPieces || [];
             players[data.playerId].bazaarPieces = data.playerBazaarPieces || [];
             // НЕ переключаем ход - соперник должен иметь возможность походить после взятия из базара
+            // currentPlayer НЕ МЕНЯЕТСЯ!
+            console.log(`bazaarTaken: currentPlayer ПОСЛЕ обновления=${currentPlayer}, НЕ ДОЛЖЕН ИЗМЕНИТЬСЯ`);
             renderAvailablePieces();
             updateBazaarButtons();
             updateCurrentPlayerDisplay();
