@@ -18,6 +18,17 @@
       padding: 20px;
     }
     
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.7;
+        transform: scale(1.2);
+      }
+    }
+    
     .container {
       max-width: 1400px;
       margin: 0 auto;
@@ -2464,8 +2475,28 @@
         
         peer.on('connection', (connection) => {
           conn = connection;
-          updatePeerStatus(true);
           console.log('Подключен игрок:', connection.peer);
+          
+          connection.on('open', () => {
+            updatePeerStatus(true);
+            console.log('Соединение с игроком установлено:', connection.peer);
+            
+            // Отправляем уведомление о подключении и синхронизируем состояние
+            sendOnlineMessage({ 
+              type: 'peerConnected',
+              isHost: true 
+            });
+            
+            // Отправляем текущее состояние игры новому игроку
+            if (isHost) {
+              sendOnlineMessage({
+                type: 'gameState',
+                placedPieces: placedPieces,
+                players: players,
+                currentPlayer: currentPlayer
+              });
+            }
+          });
           
           connection.on('data', (data) => {
             handleOnlineMessage(data);
@@ -2528,6 +2559,12 @@
           onlinePlayerId = 1; // Подключающийся игрок становится вторым
           console.log('Подключились к игроку:', peerId);
           
+          // Отправляем уведомление о подключении
+          sendOnlineMessage({ 
+            type: 'peerConnected',
+            isHost: false 
+          });
+          
           // Запрашиваем состояние игры у хоста
           sendOnlineMessage({ type: 'requestState' });
         });
@@ -2566,6 +2603,31 @@
       console.log('Получено сообщение:', data);
       
       switch (data.type) {
+        case 'peerConnected':
+          // Второй игрок подключился
+          updatePeerStatus(true);
+          console.log('Соперник подключился, isHost:', data.isHost);
+          
+          // Если мы хост и получили уведомление о подключении, отправляем состояние
+          if (isHost) {
+            sendOnlineMessage({
+              type: 'gameState',
+              placedPieces: placedPieces,
+              players: players,
+              currentPlayer: currentPlayer
+            });
+          }
+          
+          // Показываем уведомление о подключении
+          const peerStatusEl = document.getElementById('peerStatus');
+          if (peerStatusEl) {
+            const text = peerStatusEl.querySelectorAll('span')[1];
+            if (text) {
+              text.textContent = 'Игрок подключен ✓';
+            }
+          }
+          break;
+          
         case 'requestState':
           // Отправляем текущее состояние игры
           if (isHost) {
@@ -2584,9 +2646,23 @@
             placedPieces = data.placedPieces || [];
             players = data.players || players;
             currentPlayer = data.currentPlayer || 0;
+            
+            // Обновляем имена игроков для онлайн режима
+            if (onlinePlayerId === 1) {
+              players[0].name = 'Соперник';
+              players[1].name = 'Вы';
+            } else {
+              players[0].name = 'Вы';
+              players[1].name = 'Соперник';
+            }
+            
             renderBoard();
             renderAvailablePieces();
             updateCurrentPlayerDisplay();
+            updateScoresDisplay();
+            updateBazaarButtons();
+            
+            console.log('Состояние игры синхронизировано');
           }
           break;
           
@@ -2652,9 +2728,21 @@
         const text = statusEl.querySelectorAll('span')[1];
         if (dot) {
           dot.style.background = connected ? '#22c55e' : '#ef4444';
+          // Добавляем анимацию пульсации при подключении
+          if (connected) {
+            dot.style.animation = 'pulse 2s infinite';
+          } else {
+            dot.style.animation = 'none';
+          }
         }
         if (text) {
-          text.textContent = connected ? 'Игрок ✓' : 'Игрок ✗';
+          if (connected) {
+            text.textContent = 'Игрок подключен ✓';
+            text.style.color = '#22c55e';
+          } else {
+            text.textContent = 'Игрок не подключен ✗';
+            text.style.color = '#ef4444';
+          }
         }
       }
     }
