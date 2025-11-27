@@ -333,9 +333,10 @@
               <span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block;"></span>
               <span style="font-size: 12px;">Игрок</span>
             </div>
-            <div id="myPeerId" style="font-size: 11px; color: #64748b; padding: 4px 8px; background: #f1f5f9; border-radius: 4px; display: none;"></div>
+            <div id="myPeerId" style="font-size: 11px; color: #64748b; padding: 4px 8px; background: #f1f5f9; border-radius: 4px; display: none; cursor: pointer;" title="Нажмите для копирования"></div>
             <input type="text" id="connectPeerId" placeholder="ID соперника" style="padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; width: 120px; display: none;">
             <button id="connectBtn" style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; display: none;">Подключиться</button>
+            <button id="readyBtn" style="padding: 4px 8px; background: #22c55e; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; display: none;">Готов</button>
           </div>
         </div>
         <div>
@@ -2371,6 +2372,12 @@
           if (playerPanel0) {
             playerPanel0.classList.remove('online-opponent');
           }
+          
+          // Скрываем кнопку "Готов" у хоста
+          const readyBtn = document.getElementById('readyBtn');
+          if (readyBtn) {
+            readyBtn.style.display = 'none';
+          }
         } else {
           // Если уже подключены, используем существующие имена
           if (onlinePlayerId === 0) {
@@ -2516,29 +2523,28 @@
           conn = connection;
           console.log('Подключен игрок:', connection.peer);
           
+          // Устанавливаем обработчики до события open
+          connection.on('data', (data) => {
+            handleOnlineMessage(data);
+          });
+          
           connection.on('open', () => {
             updatePeerStatus(true);
             console.log('Соединение с игроком установлено:', connection.peer);
             
-            // Отправляем уведомление о подключении и синхронизируем состояние
-            sendOnlineMessage({ 
-              type: 'peerConnected',
-              isHost: true 
-            });
+            // Показываем уведомление первому игроку
+            alert('Игрок подключился! Игра синхронизируется...');
             
             // Отправляем текущее состояние игры новому игроку
-            if (isHost) {
+            setTimeout(() => {
               sendOnlineMessage({
                 type: 'gameState',
                 placedPieces: placedPieces,
                 players: players,
-                currentPlayer: currentPlayer
+                currentPlayer: currentPlayer,
+                startPiece: placedPieces[0] ? placedPieces[0].piece : null
               });
-            }
-          });
-          
-          connection.on('data', (data) => {
-            handleOnlineMessage(data);
+            }, 100);
           });
           
           connection.on('close', () => {
@@ -2608,14 +2614,16 @@
             playerPanel1.classList.remove('online-opponent');
           }
           
-          // Отправляем уведомление о подключении
-          sendOnlineMessage({ 
-            type: 'peerConnected',
-            isHost: false 
-          });
+          // Показываем кнопку "Готов"
+          const readyBtn = document.getElementById('readyBtn');
+          if (readyBtn) {
+            readyBtn.style.display = 'block';
+          }
           
           // Запрашиваем состояние игры у хоста
-          sendOnlineMessage({ type: 'requestState' });
+          setTimeout(() => {
+            sendOnlineMessage({ type: 'requestState' });
+          }, 100);
         });
         
         conn.on('data', (data) => {
@@ -2653,23 +2661,9 @@
       
       switch (data.type) {
         case 'peerConnected':
-          // Второй игрок подключился
+          // Второй игрок подключился (это сообщение отправляется от второго игрока)
           updatePeerStatus(true);
           console.log('Соперник подключился, isHost:', data.isHost);
-          
-          // Если мы хост, показываем уведомление
-          if (isHost) {
-            alert('Игрок подключился! Игра синхронизируется...');
-            
-            // Отправляем полное состояние игры
-            sendOnlineMessage({
-              type: 'gameState',
-              placedPieces: placedPieces,
-              players: players,
-              currentPlayer: currentPlayer,
-              startPiece: placedPieces[0] ? placedPieces[0].piece : null
-            });
-          }
           
           // Показываем уведомление о подключении
           const peerStatusEl = document.getElementById('peerStatus');
@@ -2678,6 +2672,20 @@
             if (text) {
               text.textContent = 'Игрок подключен ✓';
             }
+          }
+          break;
+          
+        case 'requestSync':
+          // Запрос на принудительную синхронизацию от второго игрока
+          if (isHost) {
+            console.log('Получен запрос на синхронизацию от второго игрока');
+            sendOnlineMessage({
+              type: 'gameState',
+              placedPieces: placedPieces,
+              players: players,
+              currentPlayer: currentPlayer,
+              startPiece: placedPieces[0] ? placedPieces[0].piece : null
+            });
           }
           break;
           
@@ -2744,14 +2752,20 @@
             
             currentPlayer = data.currentPlayer || 0;
             
-            // Применяем стиль для панели второго игрока
-            const playerPanel1 = document.getElementById('playerPanel1');
-            if (playerPanel1) {
-              playerPanel1.classList.add('online-opponent');
-            }
+            // Применяем стиль для панели первого игрока (он становится серым для второго)
             const playerPanel0 = document.getElementById('playerPanel0');
             if (playerPanel0) {
-              playerPanel0.classList.remove('online-opponent');
+              playerPanel0.classList.add('online-opponent');
+            }
+            const playerPanel1 = document.getElementById('playerPanel1');
+            if (playerPanel1) {
+              playerPanel1.classList.remove('online-opponent');
+            }
+            
+            // Скрываем кнопку "Готов" после синхронизации
+            const readyBtn = document.getElementById('readyBtn');
+            if (readyBtn) {
+              readyBtn.style.display = 'none';
             }
             
             renderBoard();
@@ -2850,10 +2864,28 @@
       const myIdEl = document.getElementById('myPeerId');
       const connectInput = document.getElementById('connectPeerId');
       const connectBtn = document.getElementById('connectBtn');
+      const readyBtn = document.getElementById('readyBtn');
       
       if (myIdEl) {
         myIdEl.textContent = `Мой ID: ${id}`;
         myIdEl.style.display = 'block';
+        // Добавляем обработчик для копирования ID
+        myIdEl.onclick = () => {
+          navigator.clipboard.writeText(id).then(() => {
+            const originalText = myIdEl.textContent;
+            myIdEl.textContent = 'ID скопирован!';
+            myIdEl.style.background = '#22c55e';
+            myIdEl.style.color = 'white';
+            setTimeout(() => {
+              myIdEl.textContent = originalText;
+              myIdEl.style.background = '#f1f5f9';
+              myIdEl.style.color = '#64748b';
+            }, 2000);
+          }).catch(err => {
+            console.error('Ошибка копирования:', err);
+            alert('Не удалось скопировать ID. ID: ' + id);
+          });
+        };
       }
       
       if (connectInput) {
@@ -2868,6 +2900,22 @@
             connectToPeer(peerId);
           } else {
             alert('Введите ID соперника');
+          }
+        };
+      }
+      
+      // Кнопка "Готов" для второго игрока
+      if (readyBtn) {
+        readyBtn.onclick = () => {
+          if (!isHost && conn && conn.open) {
+            // Запрашиваем синхронизацию у хоста
+            sendOnlineMessage({ type: 'requestSync' });
+            readyBtn.textContent = 'Синхронизация...';
+            readyBtn.disabled = true;
+            setTimeout(() => {
+              readyBtn.textContent = 'Готов';
+              readyBtn.disabled = false;
+            }, 2000);
           }
         };
       }
@@ -2903,6 +2951,12 @@
           const playerPanel1 = document.getElementById('playerPanel1');
           if (playerPanel0) playerPanel0.classList.remove('online-opponent');
           if (playerPanel1) playerPanel1.classList.remove('online-opponent');
+          
+          // Скрываем кнопку "Готов"
+          const readyBtn = document.getElementById('readyBtn');
+          if (readyBtn) {
+            readyBtn.style.display = 'none';
+          }
         }
         
         // Инициализируем PeerJS при выборе онлайн режима
