@@ -2405,10 +2405,13 @@
         players[1].name = 'Игрок 2';
       } else if (gameMode === 'online') {
         // Онлайн режим - настраиваем игроков
+        // В онлайн режиме базары должны быть одинаковыми у обоих игроков (общий базар)
         players[0].pieces = shuffled.slice(1, 7).map(piece => ({ ...piece, rotation: 0 }));
         players[1].pieces = shuffled.slice(7, 13).map(piece => ({ ...piece, rotation: 0 }));
-        players[0].bazaarPieces = shuffled.slice(13, Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
-        players[1].bazaarPieces = shuffled.slice(Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
+        // Общий базар для обоих игроков (одинаковый)
+        const commonBazaar = shuffled.slice(13).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].bazaarPieces = commonBazaar.map(p => ({ ...p })); // Копия для синхронизации
+        players[1].bazaarPieces = commonBazaar.map(p => ({ ...p })); // Копия для синхронизации
         players[0].isBot = false;
         players[1].isBot = false;
         
@@ -2516,12 +2519,19 @@
       
       // Отправляем информацию о взятии из базара в онлайн режиме
       if (gameMode === 'online' && conn && conn.open) {
+        // В онлайн режиме базары должны быть одинаковыми у обоих игроков
+        // Отправляем обновлённые базары обоих игроков
         sendOnlineMessage({
           type: 'bazaarTaken',
           playerId: playerId,
           playerPieces: player.pieces,
           playerBazaarPieces: player.bazaarPieces,
-          playerScore: player.score
+          playerScore: player.score,
+          // Отправляем базары обоих игроков для синхронизации
+          allBazaars: {
+            player0: players[0].bazaarPieces,
+            player1: players[1].bazaarPieces
+          }
         });
       }
       
@@ -3143,6 +3153,22 @@
             if (data.playerScore !== undefined) {
               players[data.playerId].score = data.playerScore;
             }
+            
+            // В онлайн режиме базары должны быть одинаковыми у обоих игроков
+            // Синхронизируем базары обоих игроков из полученных данных
+            if (data.allBazaars) {
+              if (data.allBazaars.player0) {
+                players[0].bazaarPieces = data.allBazaars.player0.map(p => ({ ...p }));
+              }
+              if (data.allBazaars.player1) {
+                players[1].bazaarPieces = data.allBazaars.player1.map(p => ({ ...p }));
+              }
+              console.log('Базары синхронизированы:', {
+                player0: players[0].bazaarPieces.length,
+                player1: players[1].bazaarPieces.length
+              });
+            }
+            
             // НЕ переключаем ход - соперник должен иметь возможность походить после взятия из базара
             // currentPlayer НЕ МЕНЯЕТСЯ!
             console.log(`bazaarTaken: currentPlayer ПОСЛЕ обновления=${currentPlayer}, НЕ ДОЛЖЕН ИЗМЕНИТЬСЯ`);
