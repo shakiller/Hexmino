@@ -2058,6 +2058,8 @@
       
       // Отправляем информацию о ходе в онлайн режиме
       if (gameMode === 'online' && conn && conn.open) {
+        // В онлайн режиме базары должны быть одинаковыми у обоих игроков
+        // Отправляем базары обоих игроков для синхронизации
         sendOnlineMessage({
           type: 'piecePlaced',
           coord: coord,
@@ -2065,7 +2067,12 @@
           playerId: currentPlayer,
           playerPieces: currentPlayerObj.pieces,
           playerScore: currentPlayerObj.score,
-          playerBazaarPieces: currentPlayerObj.bazaarPieces
+          playerBazaarPieces: currentPlayerObj.bazaarPieces,
+          // Отправляем базары обоих игроков для синхронизации
+          allBazaars: {
+            player0: players[0].bazaarPieces,
+            player1: players[1].bazaarPieces
+          }
         });
       }
       
@@ -2900,6 +2907,12 @@
         if (data.type === 'gameState') {
           addOnlineLog(`  → Размещено доминошек: ${data.placedPieces?.length || 0}, Игроков: ${data.players?.length || 0}`, 'send');
         }
+        if (data.type === 'bazaarTaken' && data.allBazaars) {
+          addOnlineLog(`  → Базар игрока 0: ${data.allBazaars.player0?.length || 0}, игрока 1: ${data.allBazaars.player1?.length || 0}`, 'send');
+        }
+        if (data.type === 'piecePlaced' && data.allBazaars) {
+          addOnlineLog(`  → Базар игрока 0: ${data.allBazaars.player0?.length || 0}, игрока 1: ${data.allBazaars.player1?.length || 0}`, 'send');
+        }
         try {
           conn.send(data);
           console.log('Сообщение отправлено успешно');
@@ -2924,6 +2937,12 @@
       if (data.type === 'gameState') {
         addOnlineLog(`  ← Размещено доминошек: ${data.placedPieces?.length || 0}, Игроков: ${data.players?.length || 0}`, 'receive');
         console.log('gameState получено, isHost=', isHost, '!isHost=', !isHost);
+      }
+      if (data.type === 'bazaarTaken' && data.allBazaars) {
+        addOnlineLog(`  ← Базар игрока 0: ${data.allBazaars.player0?.length || 0}, игрока 1: ${data.allBazaars.player1?.length || 0}`, 'receive');
+      }
+      if (data.type === 'piecePlaced' && data.allBazaars) {
+        addOnlineLog(`  ← Базар игрока 0: ${data.allBazaars.player0?.length || 0}, игрока 1: ${data.allBazaars.player1?.length || 0}`, 'receive');
       }
       
       switch (data.type) {
@@ -3134,6 +3153,21 @@
             if (data.playerBazaarPieces !== undefined) {
               players[data.playerId].bazaarPieces = data.playerBazaarPieces || [];
             }
+          }
+          
+          // В онлайн режиме базары должны быть одинаковыми у обоих игроков
+          // Синхронизируем базары обоих игроков из полученных данных
+          if (data.allBazaars) {
+            if (data.allBazaars.player0) {
+              players[0].bazaarPieces = data.allBazaars.player0.map(p => ({ ...p }));
+            }
+            if (data.allBazaars.player1) {
+              players[1].bazaarPieces = data.allBazaars.player1.map(p => ({ ...p }));
+            }
+            console.log('Базары синхронизированы после piecePlaced:', {
+              player0: players[0].bazaarPieces.length,
+              player1: players[1].bazaarPieces.length
+            });
           }
           
           // Переключаем ход
