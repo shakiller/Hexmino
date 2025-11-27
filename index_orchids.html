@@ -2268,7 +2268,8 @@
           gameOver = true;
           
           // Штрафы за оставшиеся доминошки в финале (если базары пусты и нет валидных ходов)
-          let finalScore = players[0].score;
+          const originalScore = players[0].score;
+          let finalScore = originalScore;
           let penaltyInfo = '';
           
           if (players[0].pieces.length > 0) {
@@ -2279,7 +2280,7 @@
           }
           
           const title = '🎉 Поздравляем!';
-          const content = `Вы выложили все доминошки!${penaltyInfo}<br><br><strong>Ваши очки: ${finalScore}</strong>`;
+          const content = `Вы выложили все доминошки!${penaltyInfo}<br><br><strong>Ваши очки: ${finalScore}${penaltyInfo ? ` (было ${originalScore}, штраф -${players[0].pieces.length})` : ''}</strong>`;
           
           setTimeout(() => {
             showGameEndPopup(title, content, () => resetGame());
@@ -2324,6 +2325,16 @@
         let title = '';
         let content = '';
         
+        // Определяем, кто является текущим игроком для персонализации сообщения
+        let currentPlayerId = null;
+        if (gameMode === 'online') {
+          currentPlayerId = onlinePlayerId;
+        } else if (gameMode === 'single') {
+          currentPlayerId = 0;
+        } else {
+          currentPlayerId = currentPlayer;
+        }
+        
         if (player0Empty && player1Empty) {
           // Оба выложили все - ничья
           title = 'Ничья!';
@@ -2331,13 +2342,23 @@
         } else if (player0Empty) {
           // Первый игрок выложил все
           winner = 0;
-          title = '🎉 Победитель!';
-          content = `${players[0].name} выложил все доминошки!`;
+          if (currentPlayerId === 0) {
+            title = '🎉 Вы победили!';
+            content = `Вы выложили все доминошки!`;
+          } else {
+            title = 'Вы проиграли';
+            content = `${players[0].name} выложил все доминошки!`;
+          }
         } else if (player1Empty) {
           // Второй игрок выложил все
           winner = 1;
-          title = '🎉 Победитель!';
-          content = `${players[1].name} выложил все доминошки!`;
+          if (currentPlayerId === 1) {
+            title = '🎉 Вы победили!';
+            content = `Вы выложили все доминошки!`;
+          } else {
+            title = 'Вы проиграли';
+            content = `${players[1].name} выложил все доминошки!`;
+          }
         }
         
         // Если ничья или оба не могут сделать ход, определяем по очкам
@@ -2349,20 +2370,40 @@
           
           if (finalScore0 > finalScore1) {
             winner = 0;
-            title = '🎉 Победитель!';
-            content = `${players[0].name} набрал больше очков!`;
+            if (currentPlayerId === 0) {
+              title = '🎉 Вы победили!';
+              content = `Вы набрали больше очков!`;
+            } else {
+              title = 'Вы проиграли';
+              content = `${players[0].name} набрал больше очков!`;
+            }
           } else if (finalScore1 > finalScore0) {
             winner = 1;
-            title = '🎉 Победитель!';
-            content = `${players[1].name} набрал больше очков!`;
+            if (currentPlayerId === 1) {
+              title = '🎉 Вы победили!';
+              content = `Вы набрали больше очков!`;
+            } else {
+              title = 'Вы проиграли';
+              content = `${players[1].name} набрал больше очков!`;
+            }
           } else if (players[0].pieces.length < players[1].pieces.length) {
             winner = 0;
-            title = '🎉 Победитель!';
-            content = `${players[0].name} - одинаковые очки, но осталось меньше доминошек!`;
+            if (currentPlayerId === 0) {
+              title = '🎉 Вы победили!';
+              content = `Одинаковые очки, но у вас осталось меньше доминошек!`;
+            } else {
+              title = 'Вы проиграли';
+              content = `${players[0].name} - одинаковые очки, но осталось меньше доминошек!`;
+            }
           } else if (players[1].pieces.length < players[0].pieces.length) {
             winner = 1;
-            title = '🎉 Победитель!';
-            content = `${players[1].name} - одинаковые очки, но осталось меньше доминошек!`;
+            if (currentPlayerId === 1) {
+              title = '🎉 Вы победили!';
+              content = `Одинаковые очки, но у вас осталось меньше доминошек!`;
+            } else {
+              title = 'Вы проиграли';
+              content = `${players[1].name} - одинаковые очки, но осталось меньше доминошек!`;
+            }
           } else {
             title = 'Ничья!';
             content = 'Одинаковые очки и одинаковое количество доминошек.';
