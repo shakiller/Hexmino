@@ -2413,7 +2413,8 @@
         // Определяем, кто хост (первый подключившийся)
         if (!conn || !conn.open) {
           isHost = true;
-          onlinePlayerId = 0;
+          onlinePlayerId = 0; // Хост всегда игрок 0
+          console.log('resetGame: хост, onlinePlayerId установлен в 0');
           players[0].name = 'Вы';
           players[1].name = 'Соперник';
           
@@ -2813,7 +2814,7 @@
           updatePeerStatus(true);
           isHost = false;
           onlinePlayerId = 1; // Подключающийся игрок становится вторым
-          console.log('Подключились к игроку:', peerId);
+          console.log('Подключились к игроку:', peerId, 'onlinePlayerId установлен в 1, isHost установлен в false');
           addOnlineLog(`✅ Подключились к хосту! ID хоста: ${peerId}`, 'success');
           
           // Применяем стиль для панели первого игрока (он становится серым для второго)
@@ -2977,17 +2978,18 @@
           addOnlineLog(`✅ Получено состояние игры: ${data.placedPieces?.length || 0} доминошек на доске`, 'success');
           
           if (!isHost) {
-            console.log('gameState обрабатывается вторым игроком, onlinePlayerId=', onlinePlayerId);
-            // Сохраняем центральную доминошку и размещенные доминошки
-            const receivedPlacedPieces = data.placedPieces || [];
-            const receivedPlayers = data.players || [];
-            
-            console.log('Синхронизация состояния:', {
-              receivedPlacedPieces: receivedPlacedPieces.length,
-              receivedPlayers: receivedPlayers.length,
-              onlinePlayerId: onlinePlayerId,
-              isHost: isHost
-            });
+            try {
+              console.log('gameState обрабатывается вторым игроком, onlinePlayerId=', onlinePlayerId);
+              // Сохраняем центральную доминошку и размещенные доминошки
+              const receivedPlacedPieces = data.placedPieces || [];
+              const receivedPlayers = data.players || [];
+              
+              console.log('Синхронизация состояния:', {
+                receivedPlacedPieces: receivedPlacedPieces.length,
+                receivedPlayers: receivedPlayers.length,
+                onlinePlayerId: onlinePlayerId,
+                isHost: isHost
+              });
             
             // Синхронизируем центральную доминошку
             if (receivedPlacedPieces.length > 0) {
@@ -3085,10 +3087,14 @@
             updateScoresDisplay();
             updateBazaarButtons();
             
-            console.log('Состояние игры синхронизировано успешно');
-            console.log('После синхронизации: onlinePlayerId=', onlinePlayerId, 'currentPlayer=', currentPlayer, 'isHost=', isHost);
-            addOnlineLog(`✅ Синхронизация завершена! Доска обновлена. Вы готовы играть!`, 'success');
-            addOnlineLog(`ℹ️ Текущий ход: игрок ${currentPlayer}, вы игрок ${onlinePlayerId}`, 'info');
+              console.log('Состояние игры синхронизировано успешно');
+              console.log('После синхронизации: onlinePlayerId=', onlinePlayerId, 'currentPlayer=', currentPlayer, 'isHost=', isHost);
+              addOnlineLog(`✅ Синхронизация завершена! Доска обновлена. Вы готовы играть!`, 'success');
+              addOnlineLog(`ℹ️ Текущий ход: игрок ${currentPlayer}, вы игрок ${onlinePlayerId}`, 'info');
+            } catch (error) {
+              console.error('Ошибка при синхронизации gameState:', error);
+              addOnlineLog(`❌ Ошибка синхронизации: ${error.message}`, 'error');
+            }
           } else {
             console.warn('Состояние игры получено хостом, игнорируем');
             addOnlineLog('⚠️ Состояние игры получено хостом (игнорируем)', 'error');
