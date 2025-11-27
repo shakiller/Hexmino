@@ -2499,11 +2499,8 @@
         });
       }
       
-      // В режимах с несколькими игроками передаём ход после взятия из базара
-      if (gameMode !== 'single') {
-        currentPlayer = (currentPlayer + 1) % 2;
-        updateCurrentPlayerDisplay();
-      }
+      // НЕ переключаем ход после взятия из базара - игрок должен иметь возможность походить
+      // Ход переключится только после размещения доминошки
       
       // Проверяем окончание игры
       checkGameEnd();
@@ -2511,7 +2508,7 @@
       renderAvailablePieces();
       updateBazaarButtons();
       
-      // Если следующий игрок - бот, делаем его ход
+      // Бот может взять из базара и сразу попробовать походить
       if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking && !gameOver) {
         setTimeout(() => makeBotMove(), 500);
       }
@@ -3073,7 +3070,7 @@
           if (data.playerId !== undefined) {
             players[data.playerId].pieces = data.playerPieces || [];
             players[data.playerId].bazaarPieces = data.playerBazaarPieces || [];
-            currentPlayer = (currentPlayer + 1) % 2;
+            // НЕ переключаем ход - соперник должен иметь возможность походить после взятия из базара
             renderAvailablePieces();
             updateBazaarButtons();
             updateCurrentPlayerDisplay();
