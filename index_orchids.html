@@ -2994,36 +2994,59 @@
             
             // Синхронизируем состояние первого игрока (хоста)
             if (receivedPlayers[0]) {
-              players[0].pieces = receivedPlayers[0].pieces.map(p => ({ ...p }));
-              players[0].bazaarPieces = receivedPlayers[0].bazaarPieces.map(p => ({ ...p }));
-              players[0].score = receivedPlayers[0].score || 0;
+              players[0].pieces = receivedPlayers[0].pieces ? receivedPlayers[0].pieces.map(p => ({ ...p })) : [];
+              players[0].bazaarPieces = receivedPlayers[0].bazaarPieces ? receivedPlayers[0].bazaarPieces.map(p => ({ ...p })) : [];
+              players[0].score = receivedPlayers[0].score !== undefined ? receivedPlayers[0].score : 0;
               players[0].name = 'Соперник';
+              console.log('Синхронизация игрока 0 (хост):', {
+                pieces: players[0].pieces.length,
+                bazaar: players[0].bazaarPieces.length,
+                score: players[0].score
+              });
             }
             
-            // Перераздаём доминошки для второго игрока на основе того, что уже использовано
-            const allPieces = generateAllDominoPieces();
-            
-            // Собираем все использованные доминошки
-            const usedPieceIds = new Set();
-            // Все размещенные доминошки (включая центральную)
-            placedPieces.forEach(p => usedPieceIds.add(p.piece.id));
-            // Доминошки первого игрока (хоста)
-            if (players[0].pieces) {
-              players[0].pieces.forEach(p => usedPieceIds.add(p.id));
+            // Синхронизируем состояние второго игрока из полученных данных, если они есть
+            if (receivedPlayers[1] && receivedPlayers[1].pieces && receivedPlayers[1].pieces.length > 0) {
+              // Если есть данные о втором игроке, используем их полностью
+              players[1].pieces = receivedPlayers[1].pieces.map(p => ({ ...p }));
+              players[1].bazaarPieces = receivedPlayers[1].bazaarPieces ? receivedPlayers[1].bazaarPieces.map(p => ({ ...p })) : [];
+              players[1].score = receivedPlayers[1].score !== undefined ? receivedPlayers[1].score : 0;
+              players[1].name = 'Вы';
+              console.log('Синхронизация игрока 1 из полученных данных:', {
+                pieces: players[1].pieces.length,
+                bazaar: players[1].bazaarPieces.length,
+                score: players[1].score
+              });
+            } else {
+              // Если данных о втором игроке нет, перераздаём доминошки на основе того, что уже использовано
+              const allPieces = generateAllDominoPieces();
+              
+              // Собираем все использованные доминошки
+              const usedPieceIds = new Set();
+              // Все размещенные доминошки (включая центральную)
+              placedPieces.forEach(p => usedPieceIds.add(p.piece.id));
+              // Доминошки первого игрока (хоста)
+              if (players[0].pieces) {
+                players[0].pieces.forEach(p => usedPieceIds.add(p.id));
+              }
+              if (players[0].bazaarPieces) {
+                players[0].bazaarPieces.forEach(p => usedPieceIds.add(p.id));
+              }
+              
+              // Оставшиеся доминошки
+              const remainingPieces = allPieces.filter(p => !usedPieceIds.has(p.id));
+              const shuffled = [...remainingPieces].sort(() => Math.random() - 0.5);
+              
+              // Раздаём доминошки второму игроку
+              players[1].pieces = shuffled.slice(0, 6).map(piece => ({ ...piece, rotation: 0 }));
+              players[1].bazaarPieces = shuffled.slice(6).map(piece => ({ ...piece, rotation: 0 }));
+              players[1].score = 0;
+              players[1].name = 'Вы';
+              console.log('Перераздача доминошек для игрока 1 (данных не было):', {
+                pieces: players[1].pieces.length,
+                bazaar: players[1].bazaarPieces.length
+              });
             }
-            if (players[0].bazaarPieces) {
-              players[0].bazaarPieces.forEach(p => usedPieceIds.add(p.id));
-            }
-            
-            // Оставшиеся доминошки
-            const remainingPieces = allPieces.filter(p => !usedPieceIds.has(p.id));
-            const shuffled = [...remainingPieces].sort(() => Math.random() - 0.5);
-            
-            // Раздаём доминошки второму игроку
-            players[1].pieces = shuffled.slice(0, 6).map(piece => ({ ...piece, rotation: 0 }));
-            players[1].bazaarPieces = shuffled.slice(6).map(piece => ({ ...piece, rotation: 0 }));
-            players[1].score = receivedPlayers[1]?.score || 0;
-            players[1].name = 'Вы';
             
             // Синхронизируем текущего игрока
             const receivedCurrentPlayer = data.currentPlayer !== undefined ? data.currentPlayer : 0;
