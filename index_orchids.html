@@ -303,9 +303,124 @@
       width: 100%;
       height: 100%;
     }
+    
+    /* Попап для финального сообщения */
+    .popup-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .popup-overlay.show {
+      display: flex;
+    }
+    
+    .popup {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      animation: popupSlideIn 0.3s ease-out;
+    }
+    
+    @keyframes popupSlideIn {
+      from {
+        transform: translateY(-50px);
+        opacity: 0;
+      }
+      to {
+        transform: translateY(0);
+        opacity: 1;
+      }
+    }
+    
+    .popup-title {
+      font-size: 24px;
+      font-weight: bold;
+      color: #1e293b;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    
+    .popup-content {
+      font-size: 16px;
+      color: #475569;
+      line-height: 1.6;
+      margin-bottom: 25px;
+      white-space: pre-line;
+    }
+    
+    .popup-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    
+    .popup-btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .popup-btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+    
+    .popup-btn-primary:hover {
+      background: #2563eb;
+    }
+    
+    .popup-btn-secondary {
+      background: #e2e8f0;
+      color: #475569;
+    }
+    
+    .popup-btn-secondary:hover {
+      background: #cbd5e1;
+    }
+    
+    .penalty-info {
+      margin-top: 15px;
+      padding: 12px;
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    
+    .penalty-item {
+      margin: 5px 0;
+      color: #92400e;
+    }
   </style>
 </head>
 <body>
+  <!-- Попап для финального сообщения -->
+  <div id="gameEndPopup" class="popup-overlay">
+    <div class="popup">
+      <div class="popup-title" id="popupTitle"></div>
+      <div class="popup-content" id="popupContent"></div>
+      <div class="popup-buttons">
+        <button class="popup-btn popup-btn-primary" id="popupNewGame">Новая игра</button>
+        <button class="popup-btn popup-btn-secondary" id="popupClose">Закрыть</button>
+      </div>
+    </div>
+  </div>
+  
   <div class="container">
     <div class="header">
       <div>
@@ -900,7 +1015,7 @@
         }, 50);
       } catch (error) {
         console.error('Ошибка при выводе лога:', error);
-        alert('Ошибка при выводе лога: ' + error.message);
+        console.error('Ошибка при выводе лога:', error);
       }
       
       // Выводим alert с краткой информацией
@@ -918,7 +1033,7 @@
         alertMsg += `Нет соседей или все соединения валидны`;
       }
       
-      alert(alertMsg);
+      console.log(alertMsg);
     }
     
     function createRotationVisualization(piece, rotation, pieceSideColors, boardPositionColors) {
@@ -1601,7 +1716,7 @@
               const color = getColorAtSide(placed.piece, side);
               alertMsg += `  Сторона ${side}: ${COLOR_NAMES[color]}\n`;
             }
-            alert(alertMsg);
+            console.log(alertMsg);
           });
         }
         
@@ -1758,7 +1873,7 @@
             
             // В онлайн режиме дополнительная проверка
             if (gameMode === 'online' && onlinePlayerId !== currentPlayer) {
-              alert('Сейчас не ваш ход!');
+              addOnlineLog('⚠️ Сейчас не ваш ход!', 'error');
               return;
             }
             
@@ -1777,18 +1892,18 @@
               if (gameMode === 'online') {
                 const isMyTurn = (onlinePlayerId === currentPlayer);
                 if (!isMyTurn) {
-                  alert('Сейчас не ваш ход!');
+                  addOnlineLog('⚠️ Сейчас не ваш ход!', 'error');
                   return;
                 }
               } else {
-                alert(`Сейчас ход ${players[currentPlayer].name}!`);
+                addOnlineLog(`⚠️ Сейчас ход ${players[currentPlayer].name}!`, 'error');
                 return;
               }
             }
             
             // В онлайн режиме дополнительная проверка
             if (gameMode === 'online' && onlinePlayerId !== currentPlayer) {
-              alert('Сейчас не ваш ход!');
+              addOnlineLog('⚠️ Сейчас не ваш ход!', 'error');
               return;
             }
             
@@ -2103,6 +2218,38 @@
       return true; // Успешное размещение
     }
     
+    // Функция для показа попапа с финальным сообщением
+    function showGameEndPopup(title, content, onNewGame) {
+      const popup = document.getElementById('gameEndPopup');
+      const popupTitle = document.getElementById('popupTitle');
+      const popupContent = document.getElementById('popupContent');
+      const popupNewGame = document.getElementById('popupNewGame');
+      const popupClose = document.getElementById('popupClose');
+      
+      if (popup && popupTitle && popupContent && popupNewGame && popupClose) {
+        popupTitle.textContent = title;
+        popupContent.innerHTML = content;
+        
+        popupNewGame.onclick = () => {
+          popup.classList.remove('show');
+          if (onNewGame) onNewGame();
+        };
+        
+        popupClose.onclick = () => {
+          popup.classList.remove('show');
+        };
+        
+        // Закрытие по клику на overlay
+        popup.onclick = (e) => {
+          if (e.target === popup) {
+            popup.classList.remove('show');
+          }
+        };
+        
+        popup.classList.add('show');
+      }
+    }
+    
     function checkGameEnd() {
       // Если игра уже закончилась, не проверяем снова
       if (gameOver) return true;
@@ -2119,12 +2266,23 @@
       if (gameMode === 'single') {
         if (allBazaarsEmpty && player0Empty) {
           gameOver = true;
-          const message = `🎉 Поздравляем! Вы выложили все доминошки!\n\nВаши очки: ${players[0].score}`;
+          
+          // Штрафы за оставшиеся доминошки в финале (если базары пусты и нет валидных ходов)
+          let finalScore = players[0].score;
+          let penaltyInfo = '';
+          
+          if (players[0].pieces.length > 0) {
+            const penalty = players[0].pieces.length;
+            finalScore -= penalty;
+            players[0].score = finalScore;
+            penaltyInfo = `<div class="penalty-info"><div class="penalty-item">⚠️ Штраф за оставшиеся доминошки: -${penalty} очко (${players[0].pieces.length} доминошек)</div></div>`;
+          }
+          
+          const title = '🎉 Поздравляем!';
+          const content = `Вы выложили все доминошки!${penaltyInfo}<br><br><strong>Ваши очки: ${finalScore}</strong>`;
+          
           setTimeout(() => {
-            alert(message);
-            if (confirm('Хотите начать новую игру?')) {
-              resetGame();
-            }
+            showGameEndPopup(title, content, () => resetGame());
           }, 300);
           return true;
         }
@@ -2143,57 +2301,95 @@
       if (allBazaarsEmpty && (bothPlayersEmpty || bothPlayersCannotMove)) {
         gameOver = true;
         
+        // Штрафы за оставшиеся доминошки в финале (если базары пусты и нет валидных ходов)
+        let penalty0 = 0;
+        let penalty1 = 0;
+        const originalScore0 = players[0].score;
+        const originalScore1 = players[1].score;
+        let finalScore0 = originalScore0;
+        let finalScore1 = originalScore1;
+        
+        if (bothPlayersCannotMove || allBazaarsEmpty) {
+          // Штраф -1 балл за каждую оставшуюся доминошку
+          penalty0 = players[0].pieces.length;
+          penalty1 = players[1].pieces.length;
+          finalScore0 -= penalty0;
+          finalScore1 -= penalty1;
+          players[0].score = finalScore0;
+          players[1].score = finalScore1;
+        }
+        
         // Игра окончена, определяем победителя
         let winner = null;
-        let message = '';
+        let title = '';
+        let content = '';
         
         if (player0Empty && player1Empty) {
           // Оба выложили все - ничья
-          message = 'Ничья! Оба игрока выложили все доминошки.';
+          title = 'Ничья!';
+          content = 'Оба игрока выложили все доминошки.';
         } else if (player0Empty) {
           // Первый игрок выложил все
           winner = 0;
-          message = `Победитель: ${players[0].name}! Выложены все доминошки.`;
+          title = '🎉 Победитель!';
+          content = `${players[0].name} выложил все доминошки!`;
         } else if (player1Empty) {
           // Второй игрок выложил все
           winner = 1;
-          message = `Победитель: ${players[1].name}! Выложены все доминошки.`;
+          title = '🎉 Победитель!';
+          content = `${players[1].name} выложил все доминошки!`;
         }
         
-        // Если ничья или оба не могут сделать ход, определяем по очкам, затем по количеству оставшихся доминошек
+        // Если ничья или оба не могут сделать ход, определяем по очкам
         if (!winner && allBazaarsEmpty) {
-          // Если оба не могут сделать ход, это тоже конец игры
           if (bothPlayersCannotMove && !bothPlayersEmpty) {
-            message = 'Игра окончена! Базары пусты и оба игрока не могут сделать ход.\n';
+            title = 'Игра окончена!';
+            content = 'Базары пусты и оба игрока не могут сделать ход.';
           }
           
-          if (players[0].score > players[1].score) {
+          if (finalScore0 > finalScore1) {
             winner = 0;
-            message = `Победитель: ${players[0].name}! Больше очков (${players[0].score} vs ${players[1].score}).`;
-          } else if (players[1].score > players[0].score) {
+            title = '🎉 Победитель!';
+            content = `${players[0].name} набрал больше очков!`;
+          } else if (finalScore1 > finalScore0) {
             winner = 1;
-            message = `Победитель: ${players[1].name}! Больше очков (${players[1].score} vs ${players[0].score}).`;
+            title = '🎉 Победитель!';
+            content = `${players[1].name} набрал больше очков!`;
           } else if (players[0].pieces.length < players[1].pieces.length) {
             winner = 0;
-            message = `Победитель: ${players[0].name}! Одинаковые очки (${players[0].score}), но осталось меньше доминошек (${players[0].pieces.length} vs ${players[1].pieces.length}).`;
+            title = '🎉 Победитель!';
+            content = `${players[0].name} - одинаковые очки, но осталось меньше доминошек!`;
           } else if (players[1].pieces.length < players[0].pieces.length) {
             winner = 1;
-            message = `Победитель: ${players[1].name}! Одинаковые очки (${players[1].score}), но осталось меньше доминошек (${players[1].pieces.length} vs ${players[0].pieces.length}).`;
+            title = '🎉 Победитель!';
+            content = `${players[1].name} - одинаковые очки, но осталось меньше доминошек!`;
           } else {
-            message = `Ничья! Одинаковые очки (${players[0].score}) и одинаковое количество доминошек (${players[0].pieces.length}).`;
+            title = 'Ничья!';
+            content = 'Одинаковые очки и одинаковое количество доминошек.';
           }
         }
         
-        // Добавляем информацию об очках к сообщению
-        if (winner !== null) {
-          message += `\nОчки: ${players[0].name} - ${players[0].score}, ${players[1].name} - ${players[1].score}`;
+        // Формируем информацию о штрафах
+        let penaltyInfo = '';
+        if (penalty0 > 0 || penalty1 > 0) {
+          penaltyInfo = '<div class="penalty-info">';
+          if (penalty0 > 0) {
+            penaltyInfo += `<div class="penalty-item">⚠️ ${players[0].name}: штраф -${penalty0} очко за ${players[0].pieces.length} оставшихся доминошек</div>`;
+          }
+          if (penalty1 > 0) {
+            penaltyInfo += `<div class="penalty-item">⚠️ ${players[1].name}: штраф -${penalty1} очко за ${players[1].pieces.length} оставшихся доминошек</div>`;
+          }
+          penaltyInfo += '</div>';
         }
+        
+        // Формируем финальное сообщение
+        content += penaltyInfo;
+        content += `<br><br><strong>Финальные очки:</strong><br>`;
+        content += `${players[0].name}: ${finalScore0}${penalty0 > 0 ? ` (было ${originalScore0}, штраф -${penalty0})` : ''}<br>`;
+        content += `${players[1].name}: ${finalScore1}${penalty1 > 0 ? ` (было ${originalScore1}, штраф -${penalty1})` : ''}`;
         
         setTimeout(() => {
-          alert(message);
-          if (confirm('Хотите начать новую игру?')) {
-            resetGame();
-          }
+          showGameEndPopup(title, content, () => resetGame());
         }, 300);
         
         return true;
@@ -2523,11 +2719,22 @@
         return;
       }
       
+      // Штраф: если у игрока есть доминошки в руке, берём из базара - штраф -1 очко за каждую взятую доминошку
+      const piecesBeforeBazaar = player.pieces.length;
+      const penaltyForBazaar = piecesBeforeBazaar > 0 ? 1 : 0; // -1 очко за взятие из базара при наличии доминошек
+      
       // Берём случайную доминошку из базара игрока
       const randomIndex = Math.floor(Math.random() * player.bazaarPieces.length);
       const piece = player.bazaarPieces.splice(randomIndex, 1)[0];
       piece.rotation = 0;
       player.pieces.push(piece);
+      
+      // Применяем штраф
+      if (penaltyForBazaar > 0) {
+        player.score -= penaltyForBazaar;
+        console.log(`takeFromBazaar: штраф -${penaltyForBazaar} очко за взятие из базара при наличии ${piecesBeforeBazaar} доминошек в руке`);
+        addOnlineLog(`⚠️ Штраф: -${penaltyForBazaar} очко за взятие из базара при наличии доминошек в руке`, 'error');
+      }
       
       // В онлайн режиме базары должны быть одинаковыми у обоих игроков
       // Обновляем базар у обоих игроков одинаково
@@ -2669,7 +2876,7 @@
               }
             }
             
-            alert('Игрок подключился! Игра синхронизируется...');
+            addOnlineLog('✅ Игрок подключился! Игра синхронизируется...', 'success');
             
             setTimeout(() => {
               addOnlineLog(`Отправка начального состояния игры (${placedPieces.length} доминошек на доске)`, 'send');
@@ -2771,7 +2978,7 @@
                 if (connection.open) {
                   updatePeerStatus(true);
                   addOnlineLog(`✅ Соединение установлено! ID второго игрока: ${connection.peer}`, 'success');
-                  alert('Игрок подключился! Игра синхронизируется...');
+                  addOnlineLog('✅ Игрок подключился! Игра синхронизируется...', 'success');
                   
                   setTimeout(() => {
                     addOnlineLog(`Отправка начального состояния игры (${placedPieces.length} доминошек на доске)`, 'send');
@@ -2787,7 +2994,7 @@
                   connection.on('open', () => {
                     updatePeerStatus(true);
                     addOnlineLog(`✅ Соединение установлено! ID второго игрока: ${connection.peer}`, 'success');
-                    alert('Игрок подключился! Игра синхронизируется...');
+                    addOnlineLog('✅ Игрок подключился! Игра синхронизируется...', 'success');
                     
                     setTimeout(() => {
                       addOnlineLog(`Отправка начального состояния игры (${placedPieces.length} доминошек на доске)`, 'send');
@@ -2806,7 +3013,7 @@
                   updatePeerStatus(false);
                   conn = null;
                   addOnlineLog('❌ Соперник отключился', 'error');
-                  alert('Соперник отключился');
+                  addOnlineLog('❌ Соперник отключился', 'error');
                 });
                 
                 connection.on('error', (err) => {
@@ -2895,18 +3102,18 @@
         conn.on('close', () => {
           updatePeerStatus(false);
           conn = null;
-          alert('Соединение разорвано');
+          addOnlineLog('❌ Соединение разорвано', 'error');
         });
         
         conn.on('error', (err) => {
           console.error('Ошибка соединения:', err);
           updatePeerStatus(false);
-          alert('Не удалось подключиться к игроку');
+          addOnlineLog('❌ Не удалось подключиться к игроку', 'error');
         });
         
       } catch (error) {
         console.error('Ошибка подключения:', error);
-        alert('Ошибка подключения: ' + error.message);
+        addOnlineLog(`❌ Ошибка подключения: ${error.message}`, 'error');
       }
     }
     
@@ -2930,13 +3137,13 @@
         } catch (error) {
           console.error('Ошибка отправки сообщения:', error);
           addOnlineLog(`ОШИБКА отправки: ${error.message}`, 'error');
-          alert('Ошибка отправки сообщения: ' + error.message);
+          addOnlineLog(`❌ Ошибка отправки сообщения: ${error.message}`, 'error');
         }
       } else {
         const errorMsg = `Соединение не установлено! conn: ${!!conn}, open: ${conn ? conn.open : false}`;
         console.warn(errorMsg);
         addOnlineLog(errorMsg, 'error');
-        alert('Соединение не установлено! Проверьте подключение.');
+        addOnlineLog('❌ Соединение не установлено! Проверьте подключение.', 'error');
       }
     }
     
@@ -3429,7 +3636,7 @@
         // Устанавливаем версию игры (номер версии для отслеживания обновлений)
         const gameVersionEl = document.getElementById('gameVersion');
         if (gameVersionEl) {
-          const VERSION = '1.0.1'; // Номер версии игры (увеличивается при каждом изменении)
+          const VERSION = '1.0.2'; // Номер версии игры (увеличивается при каждом изменении)
           gameVersionEl.textContent = `v${VERSION}`;
           gameVersionEl.title = `Версия игры: ${VERSION}`;
         }
@@ -3482,7 +3689,7 @@
         }
       } catch (error) {
         console.error('Ошибка при инициализации:', error);
-        alert('Ошибка загрузки игры. Проверьте консоль браузера (F12)');
+        console.error('Ошибка загрузки игры. Проверьте консоль браузера (F12)');
       }
     };
   </script>
