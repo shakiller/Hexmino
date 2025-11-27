@@ -2128,6 +2128,8 @@
       // Игра заканчивается если:
       // 1. Базары пусты И оба игрока выложили все доминошки
       // 2. ИЛИ базары пусты И оба игрока не могут сделать ход (нет валидных ходов)
+      const player0CanMove = hasValidMoves(players[0]);
+      const player1CanMove = hasValidMoves(players[1]);
       const bothPlayersEmpty = player0Empty && player1Empty;
       const bothPlayersCannotMove = !player0CanMove && !player1CanMove;
       
