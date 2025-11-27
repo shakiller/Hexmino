@@ -2529,19 +2529,29 @@
       piece.rotation = 0;
       player.pieces.push(piece);
       
+      // В онлайн режиме базары должны быть одинаковыми у обоих игроков
+      // Обновляем базар у обоих игроков одинаково
+      if (gameMode === 'online') {
+        // Синхронизируем базары - они должны быть одинаковыми
+        const updatedBazaar = [...player.bazaarPieces];
+        players[0].bazaarPieces = updatedBazaar.map(p => ({ ...p }));
+        players[1].bazaarPieces = updatedBazaar.map(p => ({ ...p }));
+        console.log(`takeFromBazaar: базары синхронизированы, общий базар: ${updatedBazaar.length} доминошек`);
+      }
+      
       console.log(`takeFromBazaar: взята доминошка, currentPlayer ДО обновлений=${currentPlayer}`);
       
       // Отправляем информацию о взятии из базара в онлайн режиме
       if (gameMode === 'online' && conn && conn.open) {
         // В онлайн режиме базары должны быть одинаковыми у обоих игроков
-        // Отправляем обновлённые базары обоих игроков
+        // Отправляем обновлённые базары обоих игроков (они одинаковые)
         sendOnlineMessage({
           type: 'bazaarTaken',
           playerId: playerId,
           playerPieces: player.pieces,
           playerBazaarPieces: player.bazaarPieces,
           playerScore: player.score,
-          // Отправляем базары обоих игроков для синхронизации
+          // Отправляем базары обоих игроков для синхронизации (они одинаковые)
           allBazaars: {
             player0: players[0].bazaarPieces,
             player1: players[1].bazaarPieces
@@ -3419,7 +3429,7 @@
         // Устанавливаем версию игры (номер версии для отслеживания обновлений)
         const gameVersionEl = document.getElementById('gameVersion');
         if (gameVersionEl) {
-          const VERSION = '1.0.0'; // Номер версии игры
+          const VERSION = '1.0.1'; // Номер версии игры (увеличивается при каждом изменении)
           gameVersionEl.textContent = `v${VERSION}`;
           gameVersionEl.title = `Версия игры: ${VERSION}`;
         }
