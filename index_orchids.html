@@ -356,7 +356,6 @@
       color: #475569;
       line-height: 1.6;
       margin-bottom: 25px;
-      white-space: pre-line;
     }
     
     .popup-buttons {
@@ -406,6 +405,252 @@
       margin: 5px 0;
       color: #92400e;
     }
+    
+    /* Стили для попапа с правилами */
+    .popup.popup-rules {
+      max-width: 600px;
+    }
+    
+    .rules-content {
+      line-height: 1;
+    }
+    
+    .rules-row {
+      display: flex;
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+    
+    .rules-row:not(:first-child) {
+      margin-top: 20px;
+    }
+    
+    .rules-title {
+      color: #1e293b;
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 0;
+      margin-bottom: 0;
+      margin-right: 15px;
+      min-width: 120px;
+      flex-shrink: 0;
+    }
+    
+    .rules-text {
+      margin-top: 0;
+      margin-bottom: 0;
+      flex: 1;
+    }
+    
+    .rules-text p {
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+    
+    .rules-text ul {
+      margin-left: 20px;
+      margin-top: 0;
+      margin-bottom: 0;
+      padding-left: 0;
+    }
+    
+    .rules-text li {
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+    
+    /* Стили для заголовка */
+    .title-wrapper {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    
+    .game-version {
+      font-size: 10px;
+      color: #94a3b8;
+      font-weight: normal;
+      font-family: monospace;
+    }
+    
+    .rules-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid #cbd5e1;
+      background: white;
+      color: #64748b;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      margin-left: 8px;
+    }
+    
+    .rules-btn:hover {
+      border-color: #3b82f6;
+      color: #3b82f6;
+    }
+    
+    .subtitle {
+      font-size: 14px;
+      color: #64748b;
+    }
+    
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    
+    .control-label {
+      font-size: 14px;
+      color: #64748b;
+    }
+    
+    .control-label-small {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 4px;
+    }
+    
+    #gameMode {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 2px solid #cbd5e1;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    
+    .online-status-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      display: inline-block;
+    }
+    
+    .status-text {
+      font-size: 12px;
+    }
+    
+    .peer-id {
+      font-size: 11px;
+      color: #64748b;
+      padding: 4px 8px;
+      background: #f1f5f9;
+      border-radius: 4px;
+      display: none;
+      cursor: pointer;
+    }
+    
+    .peer-id-input {
+      padding: 4px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      font-size: 11px;
+      width: 120px;
+      display: none;
+    }
+    
+    .connect-btn {
+      padding: 4px 8px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      display: none;
+    }
+    
+    .ready-btn {
+      padding: 4px 8px;
+      background: #22c55e;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      display: none;
+    }
+    
+    .score-box {
+      text-align: center;
+      padding: 5px 10px;
+      background: #f1f5f9;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    
+    .score-label {
+      font-size: 12px;
+      color: #64748b;
+    }
+    
+    .score-value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #3b82f6;
+    }
+    
+    .bazaar-btn {
+      margin-top: 10px;
+      padding: 8px 16px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+    }
+    
+    .online-log-panel {
+      display: none;
+      margin-top: 20px;
+    }
+    
+    .online-log-content {
+      max-height: 200px;
+      font-size: 11px;
+    }
+    
+    .debug-btn {
+      background: #ef4444;
+    }
+    
+    .log-time {
+      color: #64748b;
+      font-size: 10px;
+    }
+    
+    .log-player {
+      font-weight: bold;
+    }
+    
+    .log-entry {
+      margin-bottom: 4px;
+      padding: 4px 8px;
+      border-left: 3px solid;
+      background: #f8fafc;
+    }
   </style>
 </head>
 <body>
@@ -421,19 +666,31 @@
     </div>
   </div>
   
+  <!-- Попап с правилами игры -->
+  <div id="rulesPopup" class="popup-overlay">
+    <div class="popup popup-rules">
+      <div class="popup-title" id="rulesPopupTitle">📖 Правила игры</div>
+      <div class="popup-content" id="rulesPopupContent"></div>
+      <div class="popup-buttons">
+        <button class="popup-btn popup-btn-primary" id="rulesPopupClose">Понятно</button>
+      </div>
+    </div>
+  </div>
+  
   <div class="container">
     <div class="header">
       <div>
-        <div class="title" style="display: flex; align-items: baseline; gap: 8px;">
+        <div class="title title-wrapper">
           <span>Гексагональное Домино</span>
-          <span id="gameVersion" style="font-size: 10px; color: #94a3b8; font-weight: normal; font-family: monospace;"></span>
+          <span id="gameVersion" class="game-version"></span>
+          <button id="rulesBtn" class="rules-btn" title="Правила игры">?</button>
         </div>
-        <div style="font-size: 14px; color: #64748b;">Соединяйте доминошки цвет к цвету</div>
+        <div class="subtitle">Соединяйте доминошки цвет к цвету</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+      <div class="header-controls">
         <div>
-          <div style="font-size: 14px; color: #64748b;">Режим игры</div>
-          <select id="gameMode" style="padding: 8px 12px; border-radius: 6px; border: 2px solid #cbd5e1; font-size: 14px; cursor: pointer;">
+          <div class="control-label">Режим игры</div>
+          <select id="gameMode">
             <option value="single">1 игрок</option>
             <option value="two">2 игрока</option>
             <option value="bot">Игра с ботом</option>
@@ -441,28 +698,28 @@
           </select>
         </div>
         <div id="onlineStatus" style="display: none;">
-          <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">Статус подключения</div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <div id="serverStatus" style="display: flex; align-items: center; gap: 4px;">
-              <span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block;"></span>
-              <span style="font-size: 12px;">Сервер</span>
+          <div class="control-label-small">Статус подключения</div>
+          <div class="online-status-group">
+            <div id="serverStatus" class="status-indicator">
+              <span class="status-dot"></span>
+              <span class="status-text">Сервер</span>
             </div>
-            <div id="peerStatus" style="display: flex; align-items: center; gap: 4px;">
-              <span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: inline-block;"></span>
-              <span style="font-size: 12px;">Игрок</span>
+            <div id="peerStatus" class="status-indicator">
+              <span class="status-dot"></span>
+              <span class="status-text">Игрок</span>
             </div>
-            <div id="myPeerId" style="font-size: 11px; color: #64748b; padding: 4px 8px; background: #f1f5f9; border-radius: 4px; display: none; cursor: pointer;" title="Нажмите для копирования"></div>
-            <input type="text" id="connectPeerId" placeholder="ID соперника" style="padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 11px; width: 120px; display: none;">
-            <button id="connectBtn" style="padding: 4px 8px; background: #3b82f6; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; display: none;">Подключиться</button>
-            <button id="readyBtn" style="padding: 4px 8px; background: #22c55e; color: white; border: none; border-radius: 4px; font-size: 11px; cursor: pointer; display: none;">Готов</button>
+            <div id="myPeerId" class="peer-id" title="Нажмите для копирования"></div>
+            <input type="text" id="connectPeerId" placeholder="ID соперника" class="peer-id-input">
+            <button id="connectBtn" class="connect-btn">Подключиться</button>
+            <button id="readyBtn" class="ready-btn">Готов</button>
           </div>
         </div>
         <div>
-          <div style="font-size: 14px; color: #64748b;">Ход игрока</div>
+          <div class="control-label">Ход игрока</div>
           <div class="score" id="currentPlayerDisplay">Игрок 1</div>
         </div>
         <button class="reset-btn" id="resetBtn">🔄 Сброс</button>
-        <button id="debugBtn" class="reset-btn" style="background: #ef4444;">🔍 Alert</button>
+        <button id="debugBtn" class="reset-btn debug-btn">🔍 Alert</button>
       </div>
     </div>
     
@@ -477,7 +734,7 @@
         <div class="panel">
           <div class="panel-title">Доступные доминошки</div>
           <div class="available-pieces" id="availablePieces0"></div>
-          <button class="bazaar-btn" id="bazaarBtn0" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
+          <button class="bazaar-btn" id="bazaarBtn0">
             Взять из базара (<span id="bazaarCount0">0</span>)
           </button>
         </div>
@@ -494,23 +751,23 @@
           <div class="log-content" id="logContent">Лог пуст. Включите режим отладки и кликните на клетку.</div>
         </div>
         
-        <div class="log-panel" id="onlineLogPanel" style="display: none; margin-top: 20px;">
+        <div class="log-panel online-log-panel" id="onlineLogPanel">
           <div class="log-title">📡 Онлайн активность</div>
-          <div class="log-content" id="onlineLogContent" style="max-height: 200px; font-size: 11px;">Ожидание подключения...</div>
+          <div class="log-content online-log-content" id="onlineLogContent">Ожидание подключения...</div>
         </div>
       </div>
       
       <!-- Игрок 2 (справа) -->
       <div class="player-panel" id="playerPanel1">
         <div class="player-title" id="playerTitle1">Игрок 2</div>
-        <div style="text-align: center; padding: 5px 10px; background: #f1f5f9; border-radius: 4px; margin-bottom: 10px;">
-          <div style="font-size: 12px; color: #64748b;">Очки</div>
-          <div style="font-size: 20px; font-weight: bold; color: #3b82f6;" id="playerScore1">0</div>
+        <div class="score-box">
+          <div class="score-label">Очки</div>
+          <div class="score-value" id="playerScore1">0</div>
         </div>
         <div class="panel">
           <div class="panel-title">Доступные доминошки</div>
           <div class="available-pieces" id="availablePieces1"></div>
-          <button class="bazaar-btn" id="bazaarBtn1" style="margin-top: 10px; padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%;">
+          <button class="bazaar-btn" id="bazaarBtn1">
             Взять из базара (<span id="bazaarCount1">0</span>)
           </button>
         </div>
@@ -576,11 +833,9 @@
       const typeColor = type === 'error' ? '#ef4444' : type === 'success' ? '#22c55e' : type === 'send' ? '#3b82f6' : type === 'receive' ? '#8b5cf6' : '#64748b';
       
       const logEntry = document.createElement('div');
-      logEntry.style.marginBottom = '4px';
-      logEntry.style.padding = '4px 8px';
-      logEntry.style.borderLeft = `3px solid ${typeColor}`;
-      logEntry.style.background = '#f8fafc';
-      logEntry.innerHTML = `<span style="color: #64748b; font-size: 10px;">[${time}]</span> <span style="font-weight: bold; color: ${typeColor};">${typeIcon} ${playerName}:</span> ${message}`;
+      logEntry.className = 'log-entry';
+      logEntry.style.borderLeftColor = typeColor;
+      logEntry.innerHTML = `<span class="log-time">[${time}]</span> <span class="log-player" style="color: ${typeColor};">${typeIcon} ${playerName}:</span> ${message}`;
       
       onlineLogContent.insertBefore(logEntry, onlineLogContent.firstChild);
       
@@ -2250,6 +2505,99 @@
       }
     }
     
+    // Функция для показа попапа с правилами игры
+    function showRulesPopup() {
+      const popup = document.getElementById('rulesPopup');
+      const popupContent = document.getElementById('rulesPopupContent');
+      const popupClose = document.getElementById('rulesPopupClose');
+      
+      if (popup && popupContent && popupClose) {
+        const rules = `
+          <div class="rules-content">
+            <div class="rules-row">
+              <div class="rules-title">🎯 Цель</div>
+              <div class="rules-text"><p>Выложите все доминошки, соединяя их по цветам. Побеждает игрок с наибольшим количеством очков.</p></div>
+            </div>
+            
+            <div class="rules-row">
+              <div class="rules-title">📐 Размещение</div>
+              <div class="rules-text">
+                <ul>
+                  <li>Первая доминошка — в центре</li>
+                  <li>Следующие должны примыкать к размещённым</li>
+                  <li>Соседние стороны должны совпадать по цвету</li>
+                  <li>Доминошку можно поворачивать</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div class="rules-row">
+              <div class="rules-title">⭐ Очки</div>
+              <div class="rules-text">
+                <ul>
+                  <li>1 базовое + 1 за каждое соединение</li>
+                  <li>Пример: 3 соседа = 4 очка</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div class="rules-row">
+              <div class="rules-title">🏪 Базар</div>
+              <div class="rules-text">
+                <ul>
+                  <li>Можно взять доминошку из базара</li>
+                  <li>Штраф: -1 очко за каждую взятую (если есть доминошки в руке)</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div class="rules-row">
+              <div class="rules-title">🏁 Конец игры</div>
+              <div class="rules-text">
+                <ul>
+                  <li>Кто-то выложил все доминошки, или</li>
+                  <li>Базары пусты и нет валидных ходов</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div class="rules-row">
+              <div class="rules-title">⚠️ Штрафы</div>
+              <div class="rules-text">
+                <ul>
+                  <li>-1 очко за каждую оставшуюся доминошку в конце</li>
+                </ul>
+              </div>
+            </div>
+            
+            <div class="rules-row">
+              <div class="rules-title">🏆 Победитель</div>
+              <div class="rules-text">
+                <ul>
+                  <li>Больше очков, при равенстве — меньше доминошек</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        `;
+        
+        popupContent.innerHTML = rules;
+        
+        popupClose.onclick = () => {
+          popup.classList.remove('show');
+        };
+        
+        // Закрытие по клику на overlay
+        popup.onclick = (e) => {
+          if (e.target === popup) {
+            popup.classList.remove('show');
+          }
+        };
+        
+        popup.classList.add('show');
+      }
+    }
+    
     function checkGameEnd() {
       // Если игра уже закончилась, не проверяем снова
       if (gameOver) return true;
@@ -3677,7 +4025,7 @@
         // Устанавливаем версию игры (номер версии для отслеживания обновлений)
         const gameVersionEl = document.getElementById('gameVersion');
         if (gameVersionEl) {
-          const VERSION = '1.0.2'; // Номер версии игры (увеличивается при каждом изменении)
+          const VERSION = '1.0.3'; // Номер версии игры (увеличивается при каждом изменении)
           gameVersionEl.textContent = `v${VERSION}`;
           gameVersionEl.title = `Версия игры: ${VERSION}`;
         }
@@ -3714,6 +4062,12 @@
         const resetBtn = document.getElementById('resetBtn');
         if (resetBtn) {
           resetBtn.addEventListener('click', resetGame);
+          
+          // Обработчик для кнопки правил
+          const rulesBtn = document.getElementById('rulesBtn');
+          if (rulesBtn) {
+            rulesBtn.addEventListener('click', showRulesPopup);
+          }
         }
         
         // Обработчик кнопки отладки
