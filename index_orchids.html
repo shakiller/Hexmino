@@ -651,6 +651,20 @@
       border-left: 3px solid;
       background: #f8fafc;
     }
+    
+    /* Анимация появления доминошки - используем только opacity, scale через SVG transform */
+    @keyframes piecePlace {
+      0% {
+        opacity: 0;
+      }
+      100% {
+        opacity: 1;
+      }
+    }
+    
+    .piece-animated {
+      animation: piecePlace 0.6s ease-out;
+    }
   </style>
 </head>
 <body>
@@ -802,6 +816,7 @@
     // Состояние игры
     let gameMode = 'single'; // 'single', 'two', 'bot', 'online'
     let placedPieces = [];
+    let lastPlacedPiece = null; // Координаты последней размещенной доминошки для анимации
     let players = [
       { id: 0, name: 'Игрок 1', pieces: [], bazaarPieces: [], isBot: false, score: 0 },
       { id: 1, name: 'Игрок 2', pieces: [], bazaarPieces: [], isBot: false, score: 0 }
@@ -1928,6 +1943,45 @@
         const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         g.setAttribute('transform', `translate(${centerX + x}, ${centerY + y})`);
         
+        // Добавляем анимацию для последней размещенной доминошки
+        let animatedGroup = null;
+        if (lastPlacedPiece && hexEquals(placed.coord, lastPlacedPiece)) {
+          // Применяем opacity анимацию через CSS
+          g.setAttribute('class', 'piece-animated');
+          
+          // Создаем внутреннюю группу для scale анимации через SVG animateTransform
+          animatedGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+          animatedGroup.setAttribute('opacity', '0');
+          
+          // SVG анимация для scale
+          const scaleAnim = document.createElementNS('http://www.w3.org/2000/svg', 'animateTransform');
+          scaleAnim.setAttribute('attributeName', 'transform');
+          scaleAnim.setAttribute('type', 'scale');
+          scaleAnim.setAttribute('values', '0.3;1.1;1');
+          scaleAnim.setAttribute('dur', '0.6s');
+          scaleAnim.setAttribute('fill', 'freeze');
+          animatedGroup.appendChild(scaleAnim);
+          
+          // SVG анимация для opacity
+          const opacityAnim = document.createElementNS('http://www.w3.org/2000/svg', 'animate');
+          opacityAnim.setAttribute('attributeName', 'opacity');
+          opacityAnim.setAttribute('values', '0;1');
+          opacityAnim.setAttribute('dur', '0.6s');
+          opacityAnim.setAttribute('fill', 'freeze');
+          animatedGroup.appendChild(opacityAnim);
+          
+          // Убираем класс и сбрасываем после завершения анимации
+          setTimeout(() => {
+            g.removeAttribute('class');
+            if (animatedGroup) {
+              animatedGroup.removeAttribute('opacity');
+              animatedGroup.setAttribute('transform', 'scale(1)');
+            }
+            // Сбрасываем lastPlacedPiece после завершения анимации
+            lastPlacedPiece = null;
+          }, 600);
+        }
+        
         // В режиме отладки добавляем обработчик клика на размещенные доминошки
         if (debugMode) {
           g.style.cursor = 'crosshair';
@@ -1975,6 +2029,9 @@
           });
         }
         
+        // Создаем группу для анимации (если нужно)
+        const animationGroup = animatedGroup || document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        
         const rotatedG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         rotatedG.setAttribute('transform', `rotate(${rotation})`);
         
@@ -2012,7 +2069,8 @@
         outline.setAttribute('stroke-width', '3');
         rotatedG.appendChild(outline);
         
-        g.appendChild(rotatedG);
+        animationGroup.appendChild(rotatedG);
+        g.appendChild(animationGroup);
         
         // Номера сторон убраны для игрового режима
         
@@ -2415,6 +2473,9 @@
       // Размещаем доминошку
       placedPieces.push({ coord, piece: pieceToPlace });
       
+      // Сохраняем координаты последней размещенной доминошки для анимации
+      lastPlacedPiece = coord;
+      
       // Удаляем доминошку из доступных текущего игрока
       const currentPlayerObj = players[currentPlayer];
       currentPlayerObj.pieces = currentPlayerObj.pieces.filter(p => p.id !== selectedPiece.id);
@@ -2459,9 +2520,9 @@
       renderAvailablePieces();
       updateBazaarButtons();
       
-      // Если следующий игрок - бот, делаем его ход
+      // Если следующий игрок - бот, делаем его ход с задержкой для просмотра анимации
       if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking && !gameOver) {
-        setTimeout(() => makeBotMove(), 500); // Небольшая задержка для визуализации
+        setTimeout(() => makeBotMove(), 1200); // Увеличена задержка для просмотра анимации
       } else if (gameMode === 'bot') {
         // Если следующий игрок не бот, сбрасываем флаг thinking
         isBotThinking = false;
@@ -2889,21 +2950,21 @@
       
       // Если не нашли валидный ход, пробуем взять из базара
       if (possibleMoves.length === 0 && bot.bazaarPieces.length > 0) {
+        console.log(`Бот берет из базара: ${bot.bazaarPieces.length} доминошек доступно`);
         takeFromBazaar(currentPlayer);
-        // После взятия из базара пробуем снова
-        setTimeout(() => {
-          if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking && !gameOver) {
-            makeBotMove();
-          } else {
-            isBotThinking = false;
-          }
-        }, 500);
+        // После взятия из базара пробуем снова (takeFromBazaar сам вызовет makeBotMove если нужно)
         return;
       }
       
-      // Если ничего не получилось, передаём ход
-      if (possibleMoves.length === 0) {
+      // Если не нашли валидный ход и базар пуст
+      if (possibleMoves.length === 0 && bot.bazaarPieces.length === 0) {
         isBotThinking = false;
+        
+        // Проверяем окончание игры перед передачей хода
+        if (checkGameEnd()) {
+          return;
+        }
+        
         // Проверяем, может ли игрок сделать ход
         const otherPlayer = (currentPlayer + 1) % 2;
         const otherPlayerHasMoves = hasValidMoves(players[otherPlayer]);
@@ -2919,6 +2980,11 @@
         updateCurrentPlayerDisplay();
         renderAvailablePieces();
         updateBazaarButtons();
+        
+        // Проверяем окончание игры после переключения хода
+        if (checkGameEnd()) {
+          return;
+        }
         
         // Если другой игрок тоже бот (не должно быть, но на всякий случай)
         if (players[currentPlayer].isBot && !isBotThinking) {
@@ -2978,10 +3044,13 @@
         players[1].isBot = false;
       } else if (gameMode === 'bot') {
         // В режиме с ботом - второй игрок бот
+        // Базары должны быть одинаковыми у обоих игроков (общий базар)
         players[0].pieces = shuffled.slice(1, 7).map(piece => ({ ...piece, rotation: 0 }));
         players[1].pieces = shuffled.slice(7, 13).map(piece => ({ ...piece, rotation: 0 }));
-        players[0].bazaarPieces = shuffled.slice(13, Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
-        players[1].bazaarPieces = shuffled.slice(Math.floor(shuffled.length / 2) + 6).map(piece => ({ ...piece, rotation: 0 }));
+        // Общий базар для обоих игроков (одинаковый, как в онлайн режиме)
+        const commonBazaar = shuffled.slice(13).map(piece => ({ ...piece, rotation: 0 }));
+        players[0].bazaarPieces = commonBazaar.map(p => ({ ...p })); // Копия для синхронизации
+        players[1].bazaarPieces = commonBazaar.map(p => ({ ...p })); // Копия для синхронизации
         players[0].isBot = false;
         players[1].isBot = true;
         players[1].name = 'Бот';
@@ -3125,14 +3194,14 @@
         addOnlineLog(`⚠️ Штраф: -${penaltyForBazaar} очко за взятие из базара при наличии доминошек в руке`, 'error');
       }
       
-      // В онлайн режиме базары должны быть одинаковыми у обоих игроков
+      // В онлайн режиме и режиме бота базары должны быть одинаковыми у обоих игроков
       // Обновляем базар у обоих игроков одинаково
-      if (gameMode === 'online') {
+      if (gameMode === 'online' || gameMode === 'bot') {
         // Синхронизируем базары - они должны быть одинаковыми
         const updatedBazaar = [...player.bazaarPieces];
         players[0].bazaarPieces = updatedBazaar.map(p => ({ ...p }));
         players[1].bazaarPieces = updatedBazaar.map(p => ({ ...p }));
-        console.log(`takeFromBazaar: базары синхронизированы, общий базар: ${updatedBazaar.length} доминошек`);
+        console.log(`takeFromBazaar: базары синхронизированы (режим: ${gameMode}), общий базар: ${updatedBazaar.length} доминошек`);
       }
       
       console.log(`takeFromBazaar: взята доминошка, currentPlayer ДО обновлений=${currentPlayer}`);
@@ -3169,7 +3238,9 @@
       console.log(`takeFromBazaar: конец - currentPlayer ПОСЛЕ обновлений=${currentPlayer}, должен остаться ${playerId}`);
       
       // Бот может взять из базара и сразу попробовать походить
-      if (gameMode === 'bot' && players[currentPlayer].isBot && !isBotThinking && !gameOver) {
+      if (gameMode === 'bot' && players[currentPlayer].isBot && !gameOver) {
+        // Сбрасываем флаг thinking, чтобы бот мог продолжить
+        isBotThinking = false;
         setTimeout(() => makeBotMove(), 500);
       }
     }
@@ -3186,9 +3257,16 @@
           // 1. Это текущий игрок (i === currentPlayer)
           // 2. У этого игрока есть доминошки в базаре (player.bazaarPieces.length > 0)
           // 3. Игра не закончена
+          // 4. Это не бот (бот берет из базара автоматически)
+          // 5. В режиме "два игрока" разрешено, в остальных режимах только для первого игрока
           const isCurrentPlayer = (i === currentPlayer);
           const hasBazaarPieces = player.bazaarPieces.length > 0;
-          const shouldBeEnabled = isCurrentPlayer && hasBazaarPieces && !gameOver;
+          const isBot = player.isBot;
+          const isTwoPlayerMode = (gameMode === 'two');
+          const isFirstPlayer = (i === 0);
+          const canPlayerControl = isTwoPlayerMode || isFirstPlayer;
+          
+          const shouldBeEnabled = isCurrentPlayer && hasBazaarPieces && !gameOver && !isBot && canPlayerControl;
           
           btn.disabled = !shouldBeEnabled;
           btn.style.opacity = shouldBeEnabled ? '1' : '0.5';
@@ -3196,7 +3274,7 @@
           
           // Отладочная информация
           if (gameMode === 'online' && i === currentPlayer) {
-            console.log(`updateBazaarButtons: игрок ${i} (${player.name}), currentPlayer=${currentPlayer}, hasBazaar=${hasBazaarPieces}, enabled=${shouldBeEnabled}`);
+            console.log(`updateBazaarButtons: игрок ${i} (${player.name}), currentPlayer=${currentPlayer}, hasBazaar=${hasBazaarPieces}, isBot=${isBot}, enabled=${shouldBeEnabled}`);
           }
         }
       }
@@ -4048,11 +4126,28 @@
           const bazaarBtn = document.getElementById(`bazaarBtn${i}`);
           if (bazaarBtn) {
             bazaarBtn.addEventListener('click', () => {
+              const player = players[i];
+              
+              // Блокируем для бота
+              if (player.isBot) {
+                console.log(`Кнопка базара заблокирована: игрок ${i} - бот`);
+                return;
+              }
+              
+              // Блокируем для второго игрока, если это не режим "два игрока"
+              const isTwoPlayerMode = (gameMode === 'two');
+              const isFirstPlayer = (i === 0);
+              if (!isTwoPlayerMode && !isFirstPlayer) {
+                console.log(`Кнопка базара заблокирована: игрок ${i} - второй игрок в режиме ${gameMode}`);
+                return;
+              }
+              
               // В онлайн режиме игрок может нажимать только свою кнопку
               if (gameMode === 'online' && i !== onlinePlayerId) {
                 addOnlineLog(`⚠️ Вы не можете использовать кнопки другого игрока!`, 'error');
                 return;
               }
+              
               takeFromBazaar(i);
             });
           }
